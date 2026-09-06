@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import DashboardPage from './pages/DashboardPage';
 import CameraNetworkPage from './pages/CameraNetworkPage';
+import ANPRStudioPage from './pages/ANPRStudioPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 
 function App() {
@@ -55,13 +56,7 @@ function App() {
             />
             <Route
               path="/anpr"
-              element={
-                <PlaceholderPage
-                  title="High-Precision OCR / ANPR Studio"
-                  phase="Phase 5"
-                  description="Image/frame ingestion, plate character recognition, confidence scoring, and multi-lane extraction."
-                />
-              }
+              element={<ANPRStudioPage />}
             />
             <Route
               path="/trajectories"

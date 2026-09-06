@@ -5,7 +5,7 @@ function Sidebar() {
   const navItems = [
     { path: '/', label: 'Overview Dashboard' },
     { path: '/cameras', label: 'Camera Network (Phase 2)' },
-    { path: '/anpr', label: 'ANPR / OCR (Phase 5)' },
+    { path: '/anpr', label: 'ANPR / OCR (Phase 3)' },
     { path: '/trajectories', label: 'Vehicle Trajectories (Phase 7)' },
     { path: '/map', label: 'GIS Live Map (Phase 8)' },
     { path: '/analytics', label: 'Traffic Analytics (Phase 9)' },

@@ -6,6 +6,7 @@ const connectDB = require('./config/db');
 
 const cameraRoutes = require('./routes/cameraRoutes');
 const detectionRoutes = require('./routes/detectionRoutes');
+const anprRoutes = require('./routes/anprRoutes');
 
 // Load environment variables
 dotenv.config();
@@ -27,12 +28,15 @@ app.get('/', (req, res) => {
     name: 'City-Wide Vehicle Intelligence & Investigation Platform API',
     version: '1.0.0',
     status: 'online',
-    phase: 'Phase 2 - Camera Network & Simulated Observations',
+    phase: 'Phase 3 - High-Precision OCR / ANPR Foundation',
     endpoints: {
       health: '/api/health',
       cameras: '/api/cameras',
       detections: '/api/detections',
-      vehicleSightings: '/api/detections/vehicle/:plateNumber'
+      vehicleSightings: '/api/detections/vehicle/:plateNumber',
+      anprRecognize: 'POST /api/anpr/recognize',
+      anprLogObservation: 'POST /api/anpr/log-observation',
+      anprSamples: '/api/anpr/test-samples'
     }
   });
 });
@@ -40,6 +44,7 @@ app.get('/', (req, res) => {
 // API Routes
 app.use('/api/cameras', cameraRoutes);
 app.use('/api/detections', detectionRoutes);
+app.use('/api/anpr', anprRoutes);
 
 // Health-Check Endpoint
 app.get('/api/health', (req, res) => {
