@@ -4,7 +4,7 @@ import { NavLink } from 'react-router-dom';
 function Sidebar() {
   const navItems = [
     { path: '/', label: 'Overview Dashboard' },
-    { path: '/cameras', label: 'Camera Network (Phase 4)' },
+    { path: '/cameras', label: 'Camera Network (Phase 2)' },
     { path: '/anpr', label: 'ANPR / OCR (Phase 5)' },
     { path: '/trajectories', label: 'Vehicle Trajectories (Phase 7)' },
     { path: '/map', label: 'GIS Live Map (Phase 8)' },

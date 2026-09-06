@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import DashboardPage from './pages/DashboardPage';
+import CameraNetworkPage from './pages/CameraNetworkPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 
 function App() {
@@ -50,13 +51,7 @@ function App() {
             />
             <Route
               path="/cameras"
-              element={
-                <PlaceholderPage
-                  title="Simulated Camera Network"
-                  phase="Phase 4"
-                  description="Multi-camera registry, camera health telemetry, and simulated junction feeds."
-                />
-              }
+              element={<CameraNetworkPage />}
             />
             <Route
               path="/anpr"

@@ -4,6 +4,9 @@ const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 
+const cameraRoutes = require('./routes/cameraRoutes');
+const detectionRoutes = require('./routes/detectionRoutes');
+
 // Load environment variables
 dotenv.config();
 
@@ -24,9 +27,19 @@ app.get('/', (req, res) => {
     name: 'City-Wide Vehicle Intelligence & Investigation Platform API',
     version: '1.0.0',
     status: 'online',
-    phase: 'Phase 1 - Project Foundation'
+    phase: 'Phase 2 - Camera Network & Simulated Observations',
+    endpoints: {
+      health: '/api/health',
+      cameras: '/api/cameras',
+      detections: '/api/detections',
+      vehicleSightings: '/api/detections/vehicle/:plateNumber'
+    }
   });
 });
+
+// API Routes
+app.use('/api/cameras', cameraRoutes);
+app.use('/api/detections', detectionRoutes);
 
 // Health-Check Endpoint
 app.get('/api/health', (req, res) => {

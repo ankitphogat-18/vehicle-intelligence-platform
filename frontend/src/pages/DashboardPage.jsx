@@ -4,9 +4,9 @@ function DashboardPage({ backendHealth, error, onRefreshHealth }) {
   return (
     <div>
       <div className="card">
-        <h2 className="card-title">Phase 1: Project Foundation Status</h2>
+        <h2 className="card-title">Vehicle Intelligence Command Platform</h2>
         <p className="card-desc">
-          Unified software platform foundation for the City-Wide Vehicle Intelligence & Investigation System (SIH 2026).
+          Unified software platform for City-Wide Vehicle Intelligence & Investigation System (SIH 2026).
         </p>
 
         <div className="grid-4">
