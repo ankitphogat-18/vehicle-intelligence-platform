@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>City-Wide Sentinel | Mobile ANPR Scanner</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #030712;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #f3f4f6;
+    }
+
+    #app-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Video Feed Fullscreen Background */
+    #video-wrapper {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #camera-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Tactical HUD Overlay Layer */
+    .hud-overlay {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      pointer-events: none;
+      padding: env(safe-area-inset-top, 16px) 16px env(safe-area-inset-bottom, 16px) 16px;
+    }
+
+    /* Header Bar */
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.82);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      padding: 10px 16px;
+      border-radius: 14px;
+      pointer-events: auto;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .badge-police {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 16px #10b981; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+
+    .cam-id {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #60a5fa;
+      text-transform: uppercase;
+    }
+
+    .status-text {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    /* Tactical Reticle Frame Box */
+    .reticle-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 84vw;
+      max-width: 360px;
+      height: 140px;
+      z-index: 15;
+      pointer-events: none;
+    }
+
+    .reticle-box {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border: 1px dashed rgba(96, 165, 250, 0.4);
+      border-radius: 12px;
+      background: rgba(30, 58, 138, 0.05);
+      box-shadow: 0 0 30px rgba(59, 130, 246, 0.15) inset;
+    }
+
+    /* Corner Brackets */
+    .corner {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: #38bdf8;
+      border-style: solid;
+    }
+    .top-left { top: -2px; left: -2px; border-width: 3px 0 0 3px; border-top-left-radius: 6px; }
+    .top-right { top: -2px; right: -2px; border-width: 3px 3px 0 0; border-top-right-radius: 6px; }
+    .bottom-left { bottom: -2px; left: -2px; border-width: 0 0 3px 3px; border-bottom-left-radius: 6px; }
+    .bottom-right { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; border-bottom-right-radius: 6px; }
+
+    /* Laser Scanner Line */
+    .scan-laser {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, transparent 0%, #38bdf8 50%, transparent 100%);
+      box-shadow: 0 0 12px #38bdf8;
+      animation: scanMove 2s ease-in-out infinite alternate;
+    }
+
+    @keyframes scanMove {
+      0% { top: 5%; opacity: 0.8; }
+      50% { opacity: 1; }
+      100% { top: 92%; opacity: 0.8; }
+    }
+
+    .reticle-label {
+      position: absolute;
+      bottom: -28px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      color: #93c5fd;
+      text-transform: uppercase;
+      background: rgba(15, 23, 42, 0.7);
+      padding: 3px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    /* Detection Alert Toast Banner */
+    .detection-banner {
+      position: absolute;
+      top: 80px;
+      left: 16px;
+      right: 16px;
+      background: rgba(6, 78, 59, 0.92);
+      border: 1px solid #10b981;
+      box-shadow: 0 8px 30px rgba(16, 185, 129, 0.4);
+      backdrop-filter: blur(12px);
+      border-radius: 14px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      opacity: 0;
+      transform: translateY(-20px) scale(0.95);
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      z-index: 30;
+      pointer-events: auto;
+    }
+
+    .detection-banner.show {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .detection-banner.critical-hotlist {
+      background: rgba(127, 29, 29, 0.95);
+      border-color: #ef4444;
+      box-shadow: 0 8px 30px rgba(239, 68, 68, 0.5);
+      animation: hotlistShake 0.4s ease-in-out;
+    }
+
+    @keyframes hotlistShake {
+      0%, 100% { transform: translateY(0) translateX(0); }
+      20%, 60% { transform: translateY(0) translateX(-4px); }
+      40%, 80% { transform: translateY(0) translateX(4px); }
+    }
+
+    .plate-badge {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #ffffff;
+      background: #000000;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid #ffffff33;
+    }
+
+    .hit-tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .hit-tag.normal {
+      background: #059669;
+      color: #ecfdf5;
+    }
+
+    .hit-tag.stolen {
+      background: #dc2626;
+      color: #fef2f2;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0.5; }
+    }
+
+    /* Bottom Control Bar & Stats */
+    .bottom-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: auto;
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-around;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 8px 12px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .stat-val {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f3f4f6;
+    }
+
+    .stat-lbl {
+      font-size: 10px;
+      color: #9ca3af;
+      text-transform: uppercase;
+    }
+
+    .action-controls {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .btn-tactical {
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #f3f4f6;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 18px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-tactical:active {
+      transform: scale(0.96);
+      background: rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-tactical.active {
+      background: #2563eb;
+      border-color: #60a5fa;
+      box-shadow: 0 0 15px rgba(37, 99, 235, 0.5);
+    }
+
+    /* Error / Permission Screen */
+    #error-screen {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #030712;
+      z-index: 50;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .error-card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid #ef4444;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 320px;
+    }
+
+    .error-card h3 {
+      color: #ef4444;
+      margin-bottom: 10px;
+    }
+
+    .error-card p {
+      font-size: 13px;
+      color: #d1d5db;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    /* Hidden Canvas for Frame Capture */
+    #capture-canvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <!-- Fullscreen Video Viewport -->
+    <div id="video-wrapper">
+      <video id="camera-video" playsinline autoplay muted></video>
+    </div>
+
+    <!-- Hidden Canvas -->
+    <canvas id="capture-canvas"></canvas>
+
+    <!-- Tactical Reticle & Scanning Laser -->
+    <div class="reticle-container">
+      <div class="reticle-box">
+        <div class="corner top-left"></div>
+        <div class="corner top-right"></div>
+        <div class="corner bottom-left"></div>
+        <div class="corner bottom-right"></div>
+        <div class="scan-laser"></div>
+      </div>
+      <div class="reticle-label">ALIGN LICENSE PLATE IN RETICLE</div>
+    </div>
+
+    <!-- Detection Banner / Toast -->
+    <div id="detection-banner" class="detection-banner">
+      <div>
+        <div class="plate-badge" id="banner-plate">--</div>
+        <div style="font-size: 10px; color: #d1d5db; margin-top: 4px;" id="banner-subtext">Confidence: 94% • Syncing to Police Console</div>
+      </div>
+      <div id="banner-tag" class="hit-tag normal">LOGGED</div>
+    </div>
+
+    <!-- HUD Overlay Interface -->
+    <div class="hud-overlay">
+      <!-- Header -->
+      <div class="header-bar">
+        <div class="badge-police">
+          <div class="pulse-dot"></div>
+          <div>
+            <div class="cam-id">CAM-MOBILE-01</div>
+            <div class="status-text" id="stream-status">Live Feed Ingestion Active</div>
+          </div>
+        </div>
+        <div style="font-size: 11px; color: #60a5fa; font-weight: 700;" id="clock-display">00:00:00</div>
+      </div>
+
+      <!-- Bottom Control & Stats Bar -->
+      <div class="bottom-bar">
+        <div class="stats-row">
+          <div class="stat-item">
+            <span class="stat-val" id="stat-frames">0</span>
+            <span class="stat-lbl">Frames Sent</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val" id="stat-hits" style="color: #10b981;">0</span>
+            <span class="stat-lbl">Plates Detected</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val" id="stat-latency">-- ms</span>
+            <span class="stat-lbl">AI Latency</span>
+          </div>
+        </div>
+
+        <div class="action-controls">
+          <button id="btn-torch" class="btn-tactical">
+            <span>🔦 Torch</span>
+          </button>
+          <button id="btn-flip" class="btn-tactical">
+            <span>🔄 Switch Camera</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error / Permission Denied Screen -->
+    <div id="error-screen">
+      <div class="error-card">
+        <h3>Camera Access Required</h3>
+        <p id="error-message">Please allow camera permissions in your browser settings to connect this device as a live police ANPR checkpoint.</p>
+        <button id="btn-retry" class="btn-tactical" style="width: 100%; justify-content: center; background: #2563eb;">
+          Retry Camera Access
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration & State
+    const INGEST_ENDPOINT = '/api/sightings/ingest-frame';
+    const CAMERA_ID = 'CAM-MOBILE-01';
+    const LOCATION_NAME = 'Mobile Field Unit Checkpoint';
+    const SCAN_INTERVAL_MS = 1000;
+
+    let videoStream = null;
+    let scanTimer = null;
+    let isProcessing = false;
+    let framesSentCount = 0;
+    let platesDetectedCount = 0;
+    let currentFacingMode = 'environment';
+    let isTorchOn = false;
+    let videoTrack = null;
+
+    // Elements
+    const videoElem = document.getElementById('camera-video');
+    const canvasElem = document.getElementById('capture-canvas');
+    const bannerElem = document.getElementById('detection-banner');
+    const bannerPlate = document.getElementById('banner-plate');
+    const bannerSubtext = document.getElementById('banner-subtext');
+    const bannerTag = document.getElementById('banner-tag');
+    const statFrames = document.getElementById('stat-frames');
+    const statHits = document.getElementById('stat-hits');
+    const statLatency = document.getElementById('stat-latency');
+    const clockDisplay = document.getElementById('clock-display');
+    const errorScreen = document.getElementById('error-screen');
+    const errorMessage = document.getElementById('error-message');
+    const btnRetry = document.getElementById('btn-retry');
+    const btnTorch = document.getElementById('btn-torch');
+    const btnFlip = document.getElementById('btn-flip');
+
+    // Update Clock HUD
+    setInterval(() => {
+      const now = new Date();
+      clockDisplay.textContent = now.toTimeString().split(' ')[0];
+    }, 1000);
+
+    // Initialize Camera Stream
+    async function initCamera() {
+      if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+      }
+
+      errorScreen.style.display = 'none';
+
+      const constraints = {
+        video: {
+          facingMode: currentFacingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoElem.srcObject = videoStream;
+        await videoElem.play();
+
+        videoTrack = videoStream.getVideoTracks()[0];
+
+        // Check torch capability
+        const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+        if (capabilities.torch) {
+          btnTorch.style.display = 'flex';
+        } else {
+          btnTorch.style.display = 'none';
+        }
+
+        // Start ingestion loop
+        if (scanTimer) clearInterval(scanTimer);
+        scanTimer = setInterval(captureAndSendFrame, SCAN_INTERVAL_MS);
+
+      } catch (err) {
+        console.error('Camera Access Error:', err);
+        errorMessage.textContent = `Unable to access camera (${err.message || 'Permission denied'}). Please ensure HTTPS or localhost/local IP is used.`;
+        errorScreen.style.display = 'flex';
+      }
+    }
+
+    // Capture Frame & Send to Backend
+    async function captureAndSendFrame() {
+      if (isProcessing || !videoElem || videoElem.readyState < 2) return;
+
+      isProcessing = true;
+      const startTime = performance.now();
+
+      try {
+        const width = videoElem.videoWidth || 640;
+        const height = videoElem.videoHeight || 480;
+
+        canvasElem.width = width;
+        canvasElem.height = height;
+        const ctx = canvasElem.getContext('2d');
+        ctx.drawImage(videoElem, 0, 0, width, height);
+
+        // Convert canvas to JPEG blob
+        const blob = await new Promise((resolve) => canvasElem.toBlob(resolve, 'image/jpeg', 0.85));
+
+        if (!blob) {
+          isProcessing = false;
+          return;
+        }
+
+        framesSentCount++;
+        statFrames.textContent = framesSentCount;
+
+        const formData = new FormData();
+        formData.append('frame', blob, 'mobile_frame.jpg');
+        formData.append('cameraId', CAMERA_ID);
+        formData.append('locationName', LOCATION_NAME);
+
+        const response = await fetch(INGEST_ENDPOINT, {
+          method: 'POST',
+          body: formData
+        });
+
+        const latency = Math.round(performance.now() - startTime);
+        statLatency.textContent = `${latency} ms`;
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.plateNumber) {
+            platesDetectedCount++;
+            statHits.textContent = platesDetectedCount;
+            triggerDetectionFeedback(data);
+          }
+        }
+      } catch (err) {
+        console.warn('Frame transmission note:', err.message);
+      } finally {
+        isProcessing = false;
+      }
+    }
+
+    // Trigger Visual & Haptic Feedback
+    function triggerDetectionFeedback(data) {
+      // Haptic vibration feedback
+      if (navigator.vibrate) {
+        if (data.hotlistHit) {
+          navigator.vibrate([200, 100, 200, 100, 300]); // Urgent pulse
+        } else {
+          navigator.vibrate(200); // Quick confirmation pulse
+        }
+      }
+
+      // Update banner content
+      bannerPlate.textContent = data.plateNumber;
+      const confPercent = Math.round((data.confidence || 0.94) * 100);
+
+      if (data.hotlistHit) {
+        bannerElem.classList.add('critical-hotlist');
+        bannerTag.className = 'hit-tag stolen';
+        bannerTag.textContent = 'HOTLIST STOLEN VEHICLE';
+        bannerSubtext.textContent = `ALERT: Reported Stolen! Cross-checked with Police Database (${confPercent}% conf)`;
+      } else {
+        bannerElem.classList.remove('critical-hotlist');
+        bannerTag.className = 'hit-tag normal';
+        bannerTag.textContent = 'LOGGED';
+        bannerSubtext.textContent = `Verified Indian Registration • Confidence: ${confPercent}%`;
+      }
+
+      // Show banner
+      bannerElem.classList.add('show');
+
+      // Auto-hide after 3.5s
+      setTimeout(() => {
+        bannerElem.classList.remove('show');
+      }, 3500);
+    }
+
+    // Flip Camera Button
+    btnFlip.addEventListener('click', () => {
+      currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+      initCamera();
+    });
+
+    // Torch Toggle Button
+    btnTorch.addEventListener('click', async () => {
+      if (!videoTrack) return;
+      try {
+        isTorchOn = !isTorchOn;
+        await videoTrack.applyConstraints({
+          advanced: [{ torch: isTorchOn }]
+        });
+        btnTorch.classList.toggle('active', isTorchOn);
+      } catch (err) {
+        console.warn('Torch constraint error:', err);
+      }
+    });
+
+    btnRetry.addEventListener('click', () => {
+      initCamera();
+    });
+
+    // Start on load
+    window.addEventListener('DOMContentLoaded', initCamera);
+  </script>
+</body>
+</html>
+

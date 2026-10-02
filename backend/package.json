@@ -10,11 +10,16 @@
     "seed": "node seed/seedPhase2.js"
   },
   "dependencies": {
+    "axios": "^1.20.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "mongoose": "^8.4.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
+    "form-data": "^4.0.6",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.24.4",
     "multer": "^2.3.0",
+    "qrcode": "^1.5.4",
     "sharp": "^0.35.4",
     "tesseract.js": "^7.0.0"
   },

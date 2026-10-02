@@ -1,22 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import DashboardPage from './pages/DashboardPage';
 import CameraNetworkPage from './pages/CameraNetworkPage';
 import ANPRStudioPage from './pages/ANPRStudioPage';
-import PlaceholderPage from './pages/PlaceholderPage';
+import VehicleSearchPage from './pages/VehicleSearchPage';
+import MapPage from './pages/MapPage';
+import AlertsPage from './pages/AlertsPage';
+import TrafficAnalyticsPage from './pages/TrafficAnalyticsPage';
+import InvestigationHubPage from './pages/InvestigationHubPage';
+import Login from './pages/Login';
+import CitizenDashboard from './pages/CitizenDashboard';
+import PoliceVerificationQueue from './pages/PoliceVerificationQueue';
+import IncidentManagementDashboard from './pages/IncidentManagementDashboard';
+import PoliceCameraConsole from './pages/PoliceCameraConsole';
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [backendHealth, setBackendHealth] = useState(null);
   const [error, setError] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const fetchHealth = async () => {
     try {
       const response = await fetch('/api/health');
-      if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error ${response.status}`);
       const data = await response.json();
       setBackendHealth(data);
       setError(null);
@@ -28,95 +45,88 @@ function App() {
 
   useEffect(() => {
     fetchHealth();
-    // Poll backend health every 10 seconds
-    const interval = setInterval(fetchHealth, 10000);
+    const interval = setInterval(fetchHealth, 15000);
     return () => clearInterval(interval);
   }, []);
 
+  const handleAuthSuccess = (authenticatedUser) => {
+    setUser(authenticatedUser);
+    if (authenticatedUser.role === 'CITIZEN') {
+      navigate('/citizen');
+    } else if (authenticatedUser.role === 'INCIDENT_MANAGEMENT') {
+      navigate('/incidents');
+    } else {
+      navigate('/');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+    navigate('/login');
+  };
+
+  // 1. Unauthenticated View (Full-screen clean login/register, no sidebar)
+  if (!user) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <Routes>
+          <Route path="/login" element={<Login onAuthSuccess={handleAuthSuccess} />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </div>
+    );
+  }
+
+  // 2. Authenticated View (Sidebar + Main layout with role-filtered views)
   return (
     <div className="app-layout">
-      <Sidebar />
+      <Sidebar user={user} />
       <div className="main-wrapper">
-        <Navbar backendHealth={backendHealth} />
+        <Navbar user={user} onLogout={handleLogout} backendHealth={backendHealth} />
         <main className="content-area">
           <Routes>
-            <Route
-              path="/"
-              element={
-                <DashboardPage
-                  backendHealth={backendHealth}
-                  error={error}
-                  onRefreshHealth={fetchHealth}
-                />
-              }
-            />
-            <Route
-              path="/cameras"
-              element={<CameraNetworkPage />}
-            />
-            <Route
-              path="/anpr"
-              element={<ANPRStudioPage />}
-            />
-            <Route
-              path="/trajectories"
-              element={
-                <PlaceholderPage
-                  title="Vehicle Trajectory Reconstruction"
-                  phase="Phase 7"
-                  description="Spatio-temporal trajectory reconstruction, multi-camera sighting timeline, and average velocity estimation."
-                />
-              }
-            />
-            <Route
-              path="/map"
-              element={
-                <PlaceholderPage
-                  title="GIS Command Map (Leaflet / OSM)"
-                  phase="Phase 8"
-                  description="Interactive city-wide GIS map plotting cameras, detections, trajectories, and geofenced zones."
-                />
-              }
-            />
-            <Route
-              path="/analytics"
-              element={
-                <PlaceholderPage
-                  title="City Traffic Analytics Dashboard"
-                  phase="Phase 9"
-                  description="Traffic heatmaps, vehicle density trends, peak-hour distributions, and congestion detection (Recharts)."
-                />
-              }
-            />
-            <Route
-              path="/alerts"
-              element={
-                <PlaceholderPage
-                  title="Real-Time Alert Center"
-                  phase="Phase 10"
-                  description="Automated alert triggers for stolen vehicles, watchlists, possible plate cloning, and trajectory anomalies."
-                />
-              }
-            />
-            <Route
-              path="/investigation"
-              element={
-                <PlaceholderPage
-                  title="Investigation & Human Verification Hub"
-                  phase="Phase 11"
-                  description="Human-in-the-loop evidence review, case management, audit trails, and false-positive resolution."
-                />
-              }
-            />
-            <Route
-              path="*"
-              element={
-                <div className="card">
-                  <h2 className="card-title">404 - Page Not Found</h2>
-                  <p className="card-desc">The requested route does not exist.</p>
-                </div>
-              }
-            />
+            {/* Citizen Routes */}
+            {user.role === 'CITIZEN' && (
+              <>
+                <Route path="/" element={<Navigate to="/citizen" replace />} />
+                <Route path="/citizen" element={<CitizenDashboard initialTab="list" />} />
+                <Route path="/citizen/register" element={<CitizenDashboard initialTab="register" />} />
+                <Route path="*" element={<Navigate to="/citizen" replace />} />
+              </>
+            )}
+
+            {/* Police Routes */}
+            {user.role === 'POLICE' && (
+              <>
+                <Route path="/" element={<DashboardPage backendHealth={backendHealth} error={error} onRefreshHealth={fetchHealth} />} />
+                <Route path="/cameras" element={<PoliceCameraConsole />} />
+                <Route path="/police/cameras" element={<PoliceCameraConsole />} />
+                <Route path="/police/verifications" element={<PoliceVerificationQueue />} />
+                <Route path="/anpr" element={<ANPRStudioPage />} />
+                <Route path="/trajectories" element={<VehicleSearchPage />} />
+                <Route path="/map" element={<MapPage />} />
+                <Route path="/map/:plate" element={<MapPage />} />
+                <Route path="/alerts" element={<AlertsPage />} />
+                <Route path="/investigation" element={<IncidentManagementDashboard />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </>
+            )}
+
+            {/* Incident Management Routes */}
+            {user.role === 'INCIDENT_MANAGEMENT' && (
+              <>
+                <Route path="/" element={<Navigate to="/incidents" replace />} />
+                <Route path="/incidents" element={<IncidentManagementDashboard />} />
+                <Route path="/report-incident" element={<IncidentManagementDashboard />} />
+                <Route path="/trajectories" element={<VehicleSearchPage />} />
+                <Route path="/map" element={<MapPage />} />
+                <Route path="/map/:plate" element={<MapPage />} />
+                <Route path="/analytics" element={<TrafficAnalyticsPage />} />
+                <Route path="*" element={<Navigate to="/incidents" replace />} />
+              </>
+            )}
           </Routes>
         </main>
       </div>
@@ -125,4 +135,3 @@ function App() {
 }
 
 export default App;
-
