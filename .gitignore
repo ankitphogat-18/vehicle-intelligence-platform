@@ -37,9 +37,13 @@ __pycache__/
 venv/
 
 # Uploads and temporary media
+backend/uploads/**
+!backend/uploads/**/.gitkeep
 backend/uploads/videos/*
 backend/uploads/frames/*
 backend/uploads/crops/*
+backend/uploads/incidents/*
+backend/uploads/rc_documents/*
 !backend/uploads/videos/.gitkeep
 !backend/uploads/frames/.gitkeep
 !backend/uploads/crops/.gitkeep

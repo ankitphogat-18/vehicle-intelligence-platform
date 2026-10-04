@@ -109,7 +109,7 @@ function App() {
                 <Route path="/map" element={<MapPage />} />
                 <Route path="/map/:plate" element={<MapPage />} />
                 <Route path="/alerts" element={<AlertsPage />} />
-                <Route path="/investigation" element={<IncidentManagementDashboard />} />
+                <Route path="/investigation" element={<InvestigationHubPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </>
             )}
@@ -118,9 +118,8 @@ function App() {
             {user.role === 'INCIDENT_MANAGEMENT' && (
               <>
                 <Route path="/" element={<Navigate to="/incidents" replace />} />
-                <Route path="/incidents" element={<IncidentManagementDashboard />} />
-                <Route path="/report-incident" element={<IncidentManagementDashboard />} />
-                <Route path="/trajectories" element={<VehicleSearchPage />} />
+                <Route path="/incidents" element={<IncidentManagementDashboard initialTab="feed" />} />
+                <Route path="/report-incident" element={<IncidentManagementDashboard initialTab="report" />} />
                 <Route path="/map" element={<MapPage />} />
                 <Route path="/map/:plate" element={<MapPage />} />
                 <Route path="/analytics" element={<TrafficAnalyticsPage />} />

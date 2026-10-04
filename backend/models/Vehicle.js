@@ -24,6 +24,54 @@ const vehicleSchema = new mongoose.Schema(
     rcDocPath: {
       type: String,
     },
+    rcDocumentUrl: {
+      type: String,
+    },
+    verificationStatus: {
+      type: String,
+      enum: ['PENDING', 'APPROVED', 'REJECTED'],
+      default: 'PENDING',
+    },
+    policeCaseStatus: {
+      type: String,
+      enum: [
+        'NOT_REPORTED',
+        'VERIFICATION_UNDER_REVIEW',
+        'SEARCH_IN_PROGRESS',
+        'PATROL_ALERTED',
+        'VEHICLE_FOUND'
+      ],
+      default: 'NOT_REPORTED',
+    },
+    policeNotes: {
+      type: String,
+      default: 'Documents submitted for verification.',
+    },
+    statusTimeline: [
+      {
+        status: {
+          type: String,
+          required: true,
+        },
+        updatedAt: {
+          type: Date,
+          default: Date.now,
+        },
+        message: {
+          type: String,
+          required: true,
+        },
+      },
+    ],
+    chalaanHistory: [
+      {
+        chalaanId: { type: String },
+        amount: { type: Number },
+        reason: { type: String },
+        date: { type: Date, default: Date.now },
+        paid: { type: Boolean, default: false },
+      },
+    ],
     isVerified: {
       type: Boolean,
       default: false,

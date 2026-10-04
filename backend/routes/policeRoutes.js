@@ -13,7 +13,9 @@ router.get(
   requireRole(['POLICE']),
   async (req, res, next) => {
     try {
-      const pendingVehicles = await Vehicle.find({ isVerified: false })
+      const pendingVehicles = await Vehicle.find({
+        $or: [{ isVerified: false }, { verificationStatus: 'PENDING' }]
+      })
         .populate('ownerId', 'name email')
         .sort({ createdAt: -1 });
 
@@ -39,7 +41,7 @@ router.patch(
   async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { action } = req.body;
+      const { action, notes } = req.body;
 
       if (!action || !['APPROVE', 'REJECT'].includes(action)) {
         return res.status(400).json({
@@ -60,6 +62,14 @@ router.patch(
 
       if (action === 'APPROVE') {
         vehicle.isVerified = true;
+        vehicle.verificationStatus = 'APPROVED';
+        vehicle.policeNotes = notes || 'Registration and RC documents verified & approved by Cyber Cell.';
+        if (!vehicle.statusTimeline) vehicle.statusTimeline = [];
+        vehicle.statusTimeline.push({
+          status: 'APPROVED',
+          message: 'Documents verified and approved by Cyber Cell & Traffic Authority.',
+          updatedAt: new Date()
+        });
         const updatedVehicle = await vehicle.save();
 
         return res.json({
@@ -68,12 +78,21 @@ router.patch(
           data: updatedVehicle
         });
       } else if (action === 'REJECT') {
-        await Vehicle.findByIdAndDelete(id);
+        vehicle.isVerified = false;
+        vehicle.verificationStatus = 'REJECTED';
+        vehicle.policeNotes = notes || 'Registration documents rejected due to discrepancies in proof.';
+        if (!vehicle.statusTimeline) vehicle.statusTimeline = [];
+        vehicle.statusTimeline.push({
+          status: 'REJECTED',
+          message: vehicle.policeNotes,
+          updatedAt: new Date()
+        });
+        const updatedVehicle = await vehicle.save();
 
         return res.json({
           success: true,
-          message: `Vehicle registration for '${vehicle.plateNumber}' rejected and removed`,
-          data: { id, plateNumber: vehicle.plateNumber }
+          message: `Vehicle registration for '${vehicle.plateNumber}' marked as REJECTED`,
+          data: updatedVehicle
         });
       }
     } catch (err) {

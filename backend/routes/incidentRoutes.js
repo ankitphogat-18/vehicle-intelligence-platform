@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const Incident = require('../models/Incident');
 const Sighting = require('../models/Sighting');
 const VehicleSighting = require('../models/VehicleSighting');
@@ -7,81 +10,136 @@ const Detection = require('../models/Detection');
 const Camera = require('../models/Camera');
 const { authenticate, requireRole } = require('../middleware/authMiddleware');
 
+// Ensure uploads/incidents directory exists
+const incidentsUploadDir = path.join(__dirname, '..', 'uploads', 'incidents');
+if (!fs.existsSync(incidentsUploadDir)) {
+  fs.mkdirSync(incidentsUploadDir, { recursive: true });
+}
+
+// Multer storage setup for incident evidence photos
+const incidentStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, incidentsUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, 'evidence-' + uniqueSuffix + ext);
+  }
+});
+
+const incidentUpload = multer({
+  storage: incidentStorage,
+  limits: { fileSize: 25 * 1024 * 1024 } // 25MB max
+});
+
 /**
- * POST /api/incidents/report
- * Report a new expressway incident (Accident or Hit & Run)
+ * Helper to process incident creation
+ */
+async function processIncidentReport(req, res, next) {
+  try {
+    const {
+      incidentType,
+      locationName,
+      cameraId,
+      incidentStartTime,
+      incidentEndTime,
+      description,
+      latitude,
+      longitude
+    } = req.body;
+
+    if (!incidentType || !['ACCIDENT', 'HIT_AND_RUN'].includes(incidentType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'ValidationError',
+        message: "incidentType must be either 'ACCIDENT' or 'HIT_AND_RUN'"
+      });
+    }
+
+    if (!cameraId || !incidentStartTime || !incidentEndTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'ValidationError',
+        message: 'Camera checkpoint (cameraId), incidentStartTime, and incidentEndTime are required'
+      });
+    }
+
+    const startTime = new Date(incidentStartTime);
+    const endTime = new Date(incidentEndTime);
+
+    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'ValidationError',
+        message: 'Invalid date/time format for incident window'
+      });
+    }
+
+    if (endTime < startTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'ValidationError',
+        message: 'incidentEndTime cannot be earlier than incidentStartTime'
+      });
+    }
+
+    let evidencePhotoUrl = null;
+    const uploadedFile = req.file || (req.files && req.files.length > 0 ? req.files[0] : null);
+    if (uploadedFile) {
+      evidencePhotoUrl = `/uploads/incidents/${uploadedFile.filename}`;
+    } else if (req.body.evidencePhotoUrl) {
+      evidencePhotoUrl = req.body.evidencePhotoUrl;
+    }
+
+    const latVal = latitude !== undefined && latitude !== '' ? parseFloat(latitude) : null;
+    const lngVal = longitude !== undefined && longitude !== '' ? parseFloat(longitude) : null;
+
+    const newIncident = new Incident({
+      incidentType,
+      locationName: locationName ? locationName.trim() : `Expressway Checkpoint ${cameraId}`,
+      cameraId: cameraId.trim().toUpperCase(),
+      incidentStartTime: startTime,
+      incidentEndTime: endTime,
+      description: description ? description.trim() : '',
+      reportedBy: req.user.id,
+      latitude: !isNaN(latVal) ? latVal : null,
+      longitude: !isNaN(lngVal) ? lngVal : null,
+      evidencePhotoUrl,
+      photoUrl: evidencePhotoUrl
+    });
+
+    const savedIncident = await newIncident.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Incident logged successfully',
+      incident: savedIncident,
+      data: savedIncident
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/incidents/report & POST /api/incidents
+ * Report a new expressway incident (Accident or Hit & Run) with optional evidence photo & GPS
  */
 router.post(
   '/report',
   authenticate,
   requireRole(['POLICE', 'INCIDENT_MANAGEMENT']),
-  async (req, res, next) => {
-    try {
-      const {
-        incidentType,
-        locationName,
-        cameraId,
-        incidentStartTime,
-        incidentEndTime,
-        description
-      } = req.body;
+  incidentUpload.any(),
+  processIncidentReport
+);
 
-      if (!incidentType || !['ACCIDENT', 'HIT_AND_RUN'].includes(incidentType)) {
-        return res.status(400).json({
-          success: false,
-          error: 'ValidationError',
-          message: "incidentType must be either 'ACCIDENT' or 'HIT_AND_RUN'"
-        });
-      }
-
-      if (!cameraId || !incidentStartTime || !incidentEndTime) {
-        return res.status(400).json({
-          success: false,
-          error: 'ValidationError',
-          message: 'Camera checkpoint (cameraId), incidentStartTime, and incidentEndTime are required'
-        });
-      }
-
-      const startTime = new Date(incidentStartTime);
-      const endTime = new Date(incidentEndTime);
-
-      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
-        return res.status(400).json({
-          success: false,
-          error: 'ValidationError',
-          message: 'Invalid date/time format for incident window'
-        });
-      }
-
-      if (endTime < startTime) {
-        return res.status(400).json({
-          success: false,
-          error: 'ValidationError',
-          message: 'incidentEndTime cannot be earlier than incidentStartTime'
-        });
-      }
-
-      const newIncident = new Incident({
-        incidentType,
-        locationName: locationName ? locationName.trim() : `Expressway Checkpoint ${cameraId}`,
-        cameraId: cameraId.trim().toUpperCase(),
-        incidentStartTime: startTime,
-        incidentEndTime: endTime,
-        description: description ? description.trim() : '',
-        reportedBy: req.user.id
-      });
-
-      const savedIncident = await newIncident.save();
-
-      res.status(201).json({
-        success: true,
-        message: 'Incident logged successfully',
-        incident: savedIncident
-      });
-    } catch (err) {
-      next(err);
-    }
-  }
+router.post(
+  '/',
+  authenticate,
+  requireRole(['POLICE', 'INCIDENT_MANAGEMENT']),
+  incidentUpload.any(),
+  processIncidentReport
 );
 
 /**

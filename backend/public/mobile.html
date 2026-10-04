@@ -403,11 +403,17 @@
         <div class="badge-police">
           <div class="pulse-dot"></div>
           <div>
-            <div class="cam-id">CAM-MOBILE-01</div>
+            <div class="cam-id">MOBILE PATROL LIVE</div>
             <div class="status-text" id="stream-status">Live Feed Ingestion Active</div>
+            <div style="font-size: 10px; color: #38bdf8; font-weight: 600; margin-top: 2px;" id="gps-status">
+              📍 Locating GPS...
+            </div>
           </div>
         </div>
-        <div style="font-size: 11px; color: #60a5fa; font-weight: 700;" id="clock-display">00:00:00</div>
+        <div style="text-align: right;">
+          <div style="font-size: 11px; color: #60a5fa; font-weight: 700;" id="clock-display">00:00:00</div>
+          <div style="font-size: 9px; color: #10b981; font-weight: 600;" id="gps-accuracy">GPS: WAITING</div>
+        </div>
       </div>
 
       <!-- Bottom Control & Stats Bar -->
@@ -453,8 +459,8 @@
   <script>
     // Configuration & State
     const INGEST_ENDPOINT = '/api/sightings/ingest-frame';
-    const CAMERA_ID = 'CAM-MOBILE-01';
-    const LOCATION_NAME = 'Mobile Field Unit Checkpoint';
+    const CAMERA_ID = 'MOBILE_PATROL_LIVE';
+    const LOCATION_NAME = '📱 Mobile Field Patrol Unit';
     const SCAN_INTERVAL_MS = 1000;
 
     let videoStream = null;
@@ -465,6 +471,11 @@
     let currentFacingMode = 'environment';
     let isTorchOn = false;
     let videoTrack = null;
+
+    // GPS Telemetry State (Defaults to Chandigarh Center if geolocation pending)
+    let currentLat = 30.7333;
+    let currentLng = 76.7794;
+    let hasRealGPS = false;
 
     // Elements
     const videoElem = document.getElementById('camera-video');
@@ -477,11 +488,51 @@
     const statHits = document.getElementById('stat-hits');
     const statLatency = document.getElementById('stat-latency');
     const clockDisplay = document.getElementById('clock-display');
+    const gpsStatus = document.getElementById('gps-status');
+    const gpsAccuracy = document.getElementById('gps-accuracy');
     const errorScreen = document.getElementById('error-screen');
     const errorMessage = document.getElementById('error-message');
     const btnRetry = document.getElementById('btn-retry');
     const btnTorch = document.getElementById('btn-torch');
     const btnFlip = document.getElementById('btn-flip');
+
+    // Live Geolocation Watcher
+    function initGeolocation() {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.watchPosition(
+          (position) => {
+            currentLat = position.coords.latitude;
+            currentLng = position.coords.longitude;
+            hasRealGPS = true;
+            const acc = Math.round(position.coords.accuracy || 10);
+            if (gpsStatus) {
+              gpsStatus.textContent = `📍 ${currentLat.toFixed(5)}°N, ${currentLng.toFixed(5)}°E`;
+            }
+            if (gpsAccuracy) {
+              gpsAccuracy.textContent = `GPS LOCK (±${acc}m)`;
+              gpsAccuracy.style.color = '#10b981';
+            }
+          },
+          (err) => {
+            console.warn('GPS location notice:', err.message);
+            if (gpsStatus && !hasRealGPS) {
+              gpsStatus.textContent = `📍 Chandigarh Sector 17 (Default)`;
+            }
+            if (gpsAccuracy && !hasRealGPS) {
+              gpsAccuracy.textContent = `GPS: ESTIMATED`;
+              gpsAccuracy.style.color = '#f59e0b';
+            }
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 5000,
+            timeout: 10000
+          }
+        );
+      } else {
+        if (gpsStatus) gpsStatus.textContent = `📍 Chandigarh Base`;
+      }
+    }
 
     // Update Clock HUD
     setInterval(() => {
@@ -563,6 +614,10 @@
         formData.append('frame', blob, 'mobile_frame.jpg');
         formData.append('cameraId', CAMERA_ID);
         formData.append('locationName', LOCATION_NAME);
+        formData.append('lat', currentLat);
+        formData.append('lng', currentLng);
+        formData.append('latitude', currentLat);
+        formData.append('longitude', currentLng);
 
         const response = await fetch(INGEST_ENDPOINT, {
           method: 'POST',
@@ -648,7 +703,10 @@
     });
 
     // Start on load
-    window.addEventListener('DOMContentLoaded', initCamera);
+    window.addEventListener('DOMContentLoaded', () => {
+      initGeolocation();
+      initCamera();
+    });
   </script>
 </body>
 </html>

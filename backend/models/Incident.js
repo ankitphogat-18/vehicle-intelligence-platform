@@ -31,6 +31,18 @@ const incidentSchema = new mongoose.Schema(
     description: {
       type: String,
     },
+    latitude: {
+      type: Number,
+    },
+    longitude: {
+      type: Number,
+    },
+    evidencePhotoUrl: {
+      type: String,
+    },
+    photoUrl: {
+      type: String,
+    },
   },
   { timestamps: true }
 );

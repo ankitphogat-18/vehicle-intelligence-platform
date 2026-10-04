@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const CAMERA_PRESETS = [
-  { id: 'CAM-001', name: 'CAM-001 - Connaught Place Radial Junction' },
-  { id: 'CAM-002', name: 'CAM-002 - Ring Road AIIMS Flyover' },
-  { id: 'CAM-003', name: 'CAM-003 - NH-48 Delhi-Gurugram Expressway Toll' },
-  { id: 'CAM_01', name: 'CAM_01 - KMP Expressway Km 20' },
-  { id: 'CAM_02', name: 'CAM_02 - Sohna Toll Plaza' },
-  { id: 'CAM_03', name: 'CAM_03 - Rajiv Chowk Checkpoint' }
+  { id: 'CAM-CHD-01', name: 'CAM-CHD-01: Tribune Chowk (Sector 29/31)' },
+  { id: 'CAM-CHD-02', name: 'CAM-CHD-02: Sector 17 Plaza Radial Junction' },
+  { id: 'CAM-CHD-03', name: 'CAM-CHD-03: ISBT Sector 43 Chowk' },
+  { id: 'CAM-CHD-04', name: 'CAM-CHD-04: Transport Chowk (Madhya Marg)' },
+  { id: 'CAM-CHD-05', name: 'CAM-CHD-05: Housing Board Chowk (Panchkula Border)' },
+  { id: 'CAM-CHD-06', name: 'CAM-CHD-06: PGI / Panjab University Chowk' },
+  { id: 'CAM-CHD-07', name: 'CAM-CHD-07: IT Park Entry Junction' },
+  { id: 'CAM-CHD-08', name: 'CAM-CHD-08: Zirakpur-Airport Road Barrier' }
 ];
 
 function PoliceCameraConsole() {

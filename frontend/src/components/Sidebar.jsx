@@ -25,8 +25,8 @@ function Sidebar({ user }) {
   } else if (user.role === 'INCIDENT_MANAGEMENT') {
     navItems = [
       { path: '/incidents', label: 'Expressway Incidents', icon: '⚠️' },
-      { path: '/report-incident', label: 'Report Crash / Accident', icon: '🚨' },
-      { path: '/trajectories', label: 'Area Vehicle Search', icon: '🔎' }
+      { path: '/map', label: 'Expressway GIS Map', icon: '🗺️' },
+      { path: '/analytics', label: 'Traffic Flow Analytics', icon: '📈' }
     ];
   } else {
     // Default fallback

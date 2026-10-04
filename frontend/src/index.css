@@ -507,4 +507,14 @@ body {
   100% { transform: scale(0.95); opacity: 0.6; }
 }
 
+/* Tactical Dark Map Theme for OpenStreetMap Leaflet Tiles */
+.leaflet-tile {
+  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3);
+}
+
+.leaflet-container {
+  background-color: #070d18 !important;
+}
+
+
 

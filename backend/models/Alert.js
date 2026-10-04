@@ -6,6 +6,14 @@ const alertSchema = new mongoose.Schema(
       type: String,
       default: 'STOLEN_VEHICLE',
     },
+    severity: {
+      type: String,
+      enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+      default: 'HIGH',
+    },
+    description: {
+      type: String,
+    },
     plateNumber: {
       type: String,
       required: true,
@@ -20,14 +28,20 @@ const alertSchema = new mongoose.Schema(
         type: String,
       },
     },
+    locationName: {
+      type: String,
+    },
+    cameraId: {
+      type: String,
+    },
     reportedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: false,
     },
     status: {
       type: String,
-      enum: ['ACTIVE', 'RESOLVED'],
+      enum: ['ACTIVE', 'RESOLVED', 'DISMISSED'],
       default: 'ACTIVE',
     },
   },

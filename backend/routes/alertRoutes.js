@@ -55,6 +55,14 @@ router.post(
 
       // Mark vehicle as stolen
       vehicle.isStolen = true;
+      vehicle.policeCaseStatus = 'SEARCH_IN_PROGRESS';
+      vehicle.policeNotes = 'Stolen vehicle alert broadcasted. Law enforcement patrol units alerted across all camera checkpoints.';
+      if (!vehicle.statusTimeline) vehicle.statusTimeline = [];
+      vehicle.statusTimeline.push({
+        status: 'SEARCH_IN_PROGRESS',
+        message: 'Reported stolen by owner. Highway intercept & surveillance patrol alerted.',
+        updatedAt: new Date()
+      });
       await vehicle.save();
 
       // Create new active stolen alert
@@ -107,13 +115,27 @@ router.get(
   async (req, res, next) => {
     try {
       const activeAlerts = await Alert.find({ status: 'ACTIVE' })
-        .populate('reportedBy', 'name email')
-        .sort({ createdAt: -1 });
+        .populate('reportedBy', 'name email phone')
+        .sort({ createdAt: -1 })
+        .lean();
+
+      // Enrich with vehicle details (RC doc, case timeline, police notes)
+      const enrichedAlerts = await Promise.all(
+        activeAlerts.map(async (alert) => {
+          const vehicle = await Vehicle.findOne({ plateNumber: alert.plateNumber })
+            .populate('ownerId', 'name email phone')
+            .lean();
+          return {
+            ...alert,
+            vehicle: vehicle || null
+          };
+        })
+      );
 
       res.json({
         success: true,
-        count: activeAlerts.length,
-        data: activeAlerts
+        count: enrichedAlerts.length,
+        data: enrichedAlerts
       });
     } catch (err) {
       next(err);
@@ -132,6 +154,7 @@ router.get(
   async (req, res, next) => {
     try {
       const plateNumber = req.params.plateNumber.toUpperCase().trim();
+      const Camera = require('../models/Camera');
 
       // 1. Primary query on Sighting model
       let sightings = await Sighting.find({ plateNumber }).sort({ timestamp: 1 }).lean();
@@ -147,7 +170,10 @@ router.get(
             locationName: s.locationName || `Junction / Camera ${s.cameraId}`,
             timestamp: s.timestamp,
             cropImagePath: s.cropImagePath || null,
-            confidence: s.plateConfidence || 0.95
+            confidence: s.plateConfidence || 0.95,
+            vehicleModel: s.vehicleModel || s.vehicleMake || null,
+            vehicleColor: s.vehicleColor || null,
+            direction: s.direction || 'INBOUND'
           }));
         } else {
           const detSightings = await Detection.find({ plateNumber }).sort({ timestamp: 1 }).lean();
@@ -159,17 +185,52 @@ router.get(
               locationName: `Camera Feed ${d.cameraId}`,
               timestamp: d.timestamp,
               cropImagePath: d.imageUrl || null,
-              confidence: d.plateConfidence || 0.92
+              confidence: d.plateConfidence || 0.92,
+              vehicleModel: d.vehicleType || null,
+              vehicleColor: d.vehicleColor || null,
+              direction: d.direction || 'INBOUND'
             }));
           }
         }
       }
 
+      // Fetch cameras to attach geo coordinates
+      const cameras = await Camera.find().lean();
+      const cameraMap = new Map(cameras.map((c) => [c.cameraId.toUpperCase(), c]));
+
+      const vehicle = await Vehicle.findOne({ plateNumber }).populate('ownerId', 'name email phone').lean();
+
+      const trajectory = (sightings || []).map((s, idx) => {
+        const cam = cameraMap.get(s.cameraId.toUpperCase());
+        const d = new Date(s.timestamp);
+        const formattedTime = `${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${d.toLocaleDateString()}`;
+
+        return {
+          step: idx + 1,
+          sightingId: s._id,
+          cameraId: s.cameraId,
+          cameraName: cam ? cam.name : s.locationName || s.cameraId,
+          locationName: cam ? cam.locationName || cam.name : s.locationName || s.cameraId,
+          latitude: cam ? cam.latitude : null,
+          longitude: cam ? cam.longitude : null,
+          sector: cam ? cam.sector : null,
+          timestamp: s.timestamp,
+          formattedTime,
+          confidence: s.confidence || 0.95,
+          cropImagePath: s.cropImagePath || (vehicle && vehicle.rcDocumentUrl ? null : null),
+          vehicleModel: s.vehicleModel || (vehicle ? vehicle.makeModel : 'Unknown Model'),
+          vehicleColor: s.vehicleColor || (vehicle ? vehicle.color : 'Unknown Color'),
+          plateNumber: s.plateNumber,
+          direction: s.direction || 'INBOUND'
+        };
+      });
+
       res.json({
         success: true,
         plateNumber,
-        count: (sightings || []).length,
-        trajectory: sightings || []
+        count: trajectory.length,
+        vehicle,
+        trajectory
       });
     } catch (err) {
       next(err);
@@ -201,11 +262,20 @@ router.patch(
       alert.status = 'RESOLVED';
       await alert.save();
 
-      // Reset isStolen on vehicle
-      await Vehicle.findOneAndUpdate(
-        { plateNumber: alert.plateNumber },
-        { isStolen: false }
-      );
+      // Reset isStolen and update status on vehicle
+      const vObj = await Vehicle.findOne({ plateNumber: alert.plateNumber });
+      if (vObj) {
+        vObj.isStolen = false;
+        vObj.policeCaseStatus = 'VEHICLE_FOUND';
+        vObj.policeNotes = 'Vehicle recovered and alert resolved by authorities.';
+        if (!vObj.statusTimeline) vObj.statusTimeline = [];
+        vObj.statusTimeline.push({
+          status: 'VEHICLE_FOUND',
+          message: 'Vehicle marked as recovered and alert closed.',
+          updatedAt: new Date()
+        });
+        await vObj.save();
+      }
 
       // Dismiss corresponding anomaly
       await Anomaly.updateMany(

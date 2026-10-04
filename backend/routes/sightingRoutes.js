@@ -6,6 +6,7 @@ const fs = require('fs');
 const Sighting = require('../models/Sighting');
 const VehicleSighting = require('../models/VehicleSighting');
 const Alert = require('../models/Alert');
+const Camera = require('../models/Camera');
 const aiBridge = require('../services/aiBridge');
 const { authenticate, requireRole } = require('../middleware/authMiddleware');
 
@@ -52,6 +53,31 @@ router.post(
     try {
       const cameraId = (req.body.cameraId || 'CAM-001').toUpperCase().trim();
       const locationName = req.body.locationName || 'Expressway Checkpoint';
+      const lat = parseFloat(req.body.lat || req.body.latitude || req.query.lat || req.query.latitude);
+      const lng = parseFloat(req.body.lng || req.body.longitude || req.query.lng || req.query.longitude);
+
+      // If mobile camera unit sends GPS coordinates, dynamically upsert the Camera pin for GIS maps
+      if (!isNaN(lat) && !isNaN(lng) && (cameraId.includes('MOBILE') || cameraId === 'MOBILE_PATROL_LIVE')) {
+        try {
+          await Camera.findOneAndUpdate(
+            { cameraId: 'MOBILE_PATROL_LIVE' },
+            {
+              cameraId: 'MOBILE_PATROL_LIVE',
+              name: '📱 Mobile Field Patrol Unit (Live GPS)',
+              locationName: locationName || '📱 Mobile Field Patrol Checkpoint',
+              latitude: lat,
+              longitude: lng,
+              status: 'ONLINE',
+              type: 'ANPR',
+              sector: 'Field Mobile Patrol',
+              junction: 'Dynamic Mobile GPS'
+            },
+            { upsert: true, new: true }
+          );
+        } catch (camErr) {
+          console.warn('[Camera Upsert Warning]:', camErr.message);
+        }
+      }
 
       let tempFilePath = null;
 
@@ -283,6 +309,101 @@ router.get(
         success: true,
         count: enriched.length,
         data: enriched
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * GET /api/sightings/trajectory/:plateNumber
+ * Returns chronological sightings trajectory enriched with camera GPS coordinates & vehicle details
+ */
+router.get(
+  '/trajectory/:plateNumber',
+  async (req, res, next) => {
+    try {
+      const plateNumber = req.params.plateNumber.toUpperCase().trim();
+      const Camera = require('../models/Camera');
+      const Vehicle = require('../models/Vehicle');
+      const Detection = require('../models/Detection');
+
+      // 1. Primary query on Sighting model
+      let sightings = await Sighting.find({ plateNumber }).sort({ timestamp: 1 }).lean();
+
+      // 2. Fallback to VehicleSighting / Detection if needed
+      if (!sightings || sightings.length === 0) {
+        const vsSightings = await VehicleSighting.find({ plateNumber }).sort({ timestamp: 1 }).lean();
+        if (vsSightings && vsSightings.length > 0) {
+          sightings = vsSightings.map((s) => ({
+            _id: s._id,
+            plateNumber: s.plateNumber,
+            cameraId: s.cameraId,
+            locationName: s.locationName || `Junction / Camera ${s.cameraId}`,
+            timestamp: s.timestamp,
+            cropImagePath: s.cropImagePath || null,
+            confidence: s.plateConfidence || 0.95,
+            vehicleModel: s.vehicleModel || s.vehicleMake || null,
+            vehicleColor: s.vehicleColor || null,
+            direction: s.direction || 'INBOUND'
+          }));
+        } else {
+          const detSightings = await Detection.find({ plateNumber }).sort({ timestamp: 1 }).lean();
+          if (detSightings && detSightings.length > 0) {
+            sightings = detSightings.map((d) => ({
+              _id: d._id,
+              plateNumber: d.plateNumber,
+              cameraId: d.cameraId,
+              locationName: `Camera Feed ${d.cameraId}`,
+              timestamp: d.timestamp,
+              cropImagePath: d.imageUrl || null,
+              confidence: d.plateConfidence || 0.92,
+              vehicleModel: d.vehicleType || null,
+              vehicleColor: d.vehicleColor || null,
+              direction: d.direction || 'INBOUND'
+            }));
+          }
+        }
+      }
+
+      // Fetch cameras to attach geo coordinates
+      const cameras = await Camera.find().lean();
+      const cameraMap = new Map(cameras.map((c) => [c.cameraId.toUpperCase(), c]));
+
+      const vehicle = await Vehicle.findOne({ plateNumber }).populate('ownerId', 'name email phone').lean();
+
+      const trajectory = (sightings || []).map((s, idx) => {
+        const cam = cameraMap.get(s.cameraId.toUpperCase());
+        const d = new Date(s.timestamp);
+        const formattedTime = `${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${d.toLocaleDateString()}`;
+
+        return {
+          step: idx + 1,
+          sightingId: s._id,
+          cameraId: s.cameraId,
+          cameraName: cam ? cam.name : s.locationName || s.cameraId,
+          locationName: cam ? cam.locationName || cam.name : s.locationName || s.cameraId,
+          latitude: cam ? cam.latitude : null,
+          longitude: cam ? cam.longitude : null,
+          sector: cam ? cam.sector : null,
+          timestamp: s.timestamp,
+          formattedTime,
+          confidence: s.confidence || 0.95,
+          cropImagePath: s.cropImagePath || null,
+          vehicleModel: s.vehicleModel || (vehicle ? vehicle.makeModel : 'Vehicle'),
+          vehicleColor: s.vehicleColor || (vehicle ? vehicle.color : 'Standard'),
+          plateNumber: s.plateNumber,
+          direction: s.direction || 'INBOUND'
+        };
+      });
+
+      res.json({
+        success: true,
+        plateNumber,
+        count: trajectory.length,
+        vehicle: vehicle || null,
+        trajectory
       });
     } catch (err) {
       next(err);

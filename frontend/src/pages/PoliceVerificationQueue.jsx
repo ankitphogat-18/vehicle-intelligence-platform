@@ -201,9 +201,9 @@ function PoliceVerificationQueue() {
                     {item.color || '—'}
                   </td>
                   <td style={{ padding: '0.85rem 1rem' }}>
-                    {item.rcDocPath ? (
+                    {(item.rcDocumentUrl || item.rcDocPath) ? (
                       <a
-                        href={item.rcDocPath}
+                        href={item.rcDocumentUrl || item.rcDocPath}
                         target="_blank"
                         rel="noreferrer"
                         style={{
@@ -213,13 +213,18 @@ function PoliceVerificationQueue() {
                           color: 'var(--accent-blue)',
                           textDecoration: 'none',
                           fontWeight: '600',
-                          fontSize: '0.8rem'
+                          fontSize: '0.8rem',
+                          backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(56, 189, 248, 0.2)'
                         }}
                       >
-                        <span>📄 View RC Doc</span>
+                        <span>📄 View RC Doc Proof</span>
+                        <span>↗</span>
                       </a>
                     ) : (
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No Doc Link</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No Doc Uploaded</span>
                     )}
                   </td>
                   <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>

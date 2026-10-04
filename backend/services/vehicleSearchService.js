@@ -10,10 +10,13 @@ const VehicleSighting = require('../models/VehicleSighting');
 async function searchByPlate(plate) {
   if (!plate) return [];
   const normalized = plate.trim().toUpperCase();
-  const sightings = await VehicleSighting.find({ plateNumber: normalized })
-    .sort({ timestamp: 1 })
-    .lean();
-  return sightings;
+  const Sighting = require('../models/Sighting');
+  
+  let sightings = await Sighting.find({ plateNumber: normalized }).sort({ timestamp: 1 }).lean();
+  if (!sightings || sightings.length === 0) {
+    sightings = await VehicleSighting.find({ plateNumber: normalized }).sort({ timestamp: 1 }).lean();
+  }
+  return sightings || [];
 }
 
 module.exports = { searchByPlate };
