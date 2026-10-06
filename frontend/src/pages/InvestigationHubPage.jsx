@@ -1,43 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const CHANDIGARH_CHECKPOINTS = [
-  { id: '', label: 'Corridor Wide (All 8 Checkpoints)' },
+  { id: '', label: 'Corridor Wide (All 8 Master Checkpoints)' },
   { id: 'CAM-CHD-01', label: 'CAM-CHD-01: Tribune Chowk (Sector 29/31)' },
   { id: 'CAM-CHD-02', label: 'CAM-CHD-02: Sector 17 Plaza Radial Junction' },
-  { id: 'CAM-CHD-03', label: 'CAM-CHD-03: ISBT Sector 43 Chowk' },
-  { id: 'CAM-CHD-04', label: 'CAM-CHD-04: Transport Chowk (Madhya Marg)' },
-  { id: 'CAM-CHD-05', label: 'CAM-CHD-05: Housing Board Chowk (Panchkula Border)' },
-  { id: 'CAM-CHD-06', label: 'CAM-CHD-06: PGI / Panjab University Chowk' },
-  { id: 'CAM-CHD-07', label: 'CAM-CHD-07: IT Park Entry Junction' },
-  { id: 'CAM-CHD-08', label: 'CAM-CHD-08: Zirakpur-Airport Road Barrier' }
+  { id: 'CAM-CHD-03', label: 'CAM-CHD-03: ISBT Sector 43 Main Terminal' },
+  { id: 'CAM-CHD-04', label: 'CAM-CHD-04: Madhya Marg (Sector 26 Transport Chowk)' },
+  { id: 'CAM-CHD-05', label: 'CAM-CHD-05: IT Park Entry Corridor (Kishangarh)' },
+  { id: 'CAM-CHD-06', label: 'CAM-CHD-06: Sukhna Lake Radial Boulevard' },
+  { id: 'CAM-CHD-07', label: 'CAM-CHD-07: Secretariat / High Court Perimeter (VIP Zone)' },
+  { id: 'CAM-CHD-08', label: 'CAM-CHD-08: Zirakpur-Chandigarh Border (Sector 31)' }
 ];
 
 function InvestigationHubPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem('user') || '{}');
+  } catch (e) {
+    user = {};
+  }
+  const isIncidentTeam = user?.role === 'INCIDENT_MANAGEMENT';
 
   // Filters State
-  const [checkpoint, setCheckpoint] = useState('');
+  const [checkpoint, setCheckpoint] = useState(searchParams.get('checkpoint') || '');
   const [timeWindow, setTimeWindow] = useState('24h'); // '1h' | '4h' | 'today' | '24h' | 'custom'
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [suspectColor, setSuspectColor] = useState('');
-  const [suspectModel, setSuspectModel] = useState('');
-  const [targetPlate, setTargetPlate] = useState('');
+  const [targetPlate, setTargetPlate] = useState(searchParams.get('plate') || '');
 
   // Investigation Results State
-  const [activeTab, setActiveTab] = useState('suspects'); // 'exact' | 'suspects' | 'all'
-  const [results, setResults] = useState({
-    exactMatches: [],
-    visualSuspects: [],
-    allSightings: [],
-    count: 0
-  });
+  const [sightings, setSightings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Owner Dossier Modal State
+  // Snapshot Full View & Owner Dossier Modal State
   const [selectedDossier, setSelectedDossier] = useState(null);
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   const calculateTimeRange = () => {
     const now = new Date();
@@ -71,8 +73,6 @@ function InvestigationHubPage() {
     if (checkpoint) params.append('locationName', checkpoint);
     params.append('startTime', startTime);
     params.append('endTime', endTime);
-    if (suspectColor.trim()) params.append('suspectColor', suspectColor.trim());
-    if (suspectModel.trim()) params.append('suspectModel', suspectModel.trim());
     if (targetPlate.trim()) params.append('plateNumber', targetPlate.trim().toUpperCase());
 
     try {
@@ -83,17 +83,7 @@ function InvestigationHubPage() {
         throw new Error(json.message || json.error || 'Failed to execute corridor investigation scan');
       }
 
-      setResults({
-        exactMatches: json.exactMatches || [],
-        visualSuspects: json.visualSuspects || [],
-        allSightings: json.allSightings || [],
-        count: json.count || 0
-      });
-
-      // Auto switch tab if no visual suspects but exact matches exist
-      if (json.visualSuspects?.length === 0 && json.exactMatches?.length > 0) {
-        setActiveTab('exact');
-      }
+      setSightings(json.sightings || json.allSightings || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -116,20 +106,58 @@ function InvestigationHubPage() {
     return `${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${d.toLocaleDateString()}`;
   };
 
+  const getFullImageUrl = (path) => {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    const backendBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    return `${backendBase}${path.startsWith('/') ? '' : '/'}${path}`;
+  };
+
+  if (isIncidentTeam) {
+    return (
+      <div className="page" style={{ maxWidth: '700px', margin: '3rem auto', textAlign: 'center' }}>
+        <div className="card" style={{ padding: '3rem 2rem' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛡️</div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '0.75rem' }}>
+            Access Restricted: Police & Investigation Authority Only
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '1.5rem' }}>
+            Corridor vehicle surveillance, ANPR plate search, and trajectory forensic tracking are restricted to Police Headquarters and Traffic Enforcement personnel.
+          </p>
+          <button
+            onClick={() => navigate('/incidents')}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: 'var(--accent-blue)',
+              color: '#0b1120',
+              border: 'none',
+              borderRadius: '6px',
+              fontWeight: '700',
+              fontSize: '0.9rem',
+              cursor: 'pointer'
+            }}
+          >
+            ← Return to Incident Management
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page investigation-page" style={{ maxWidth: '1250px', margin: '0 auto' }}>
       {/* Top Header */}
       <div style={{ marginBottom: '1.5rem' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <span>🔍</span>
-          <span>Forensic Corridor & Plate-Swap Investigation Hub</span>
+          <span>Spatio-Temporal Corridor Sighting Audit & Investigation Hub</span>
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          Automated VAHAN cross-referencing to detect cloned number plates, physical vehicle mismatches, and suspect corridor sightings.
+          Real CCTV camera image logs cross-referenced with the official VAHAN registry. Inspect visual snapshots and launch GIS trajectory tracking.
         </p>
       </div>
 
-      {/* FILTER BAR / CORRIDOR INCIDENT CONTROLS */}
+      {/* FILTER BAR / CORRIDOR CONTROLS */}
       <div
         className="card"
         style={{
@@ -141,14 +169,14 @@ function InvestigationHubPage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
           <span style={{ fontSize: '1.1rem' }}>⚙️</span>
-          <strong style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>Corridor Incident & Forensic Filters</strong>
+          <strong style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>Corridor Search & Audit Filters</strong>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
           {/* Checkpoint Dropdown */}
           <div>
             <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: '700' }}>
-              CHECKPOINT / JUNCTION
+              CHECKPOINT / CCTV JUNCTION
             </label>
             <select
               value={checkpoint}
@@ -197,58 +225,14 @@ function InvestigationHubPage() {
             </select>
           </div>
 
-          {/* Suspect Color */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: '700' }}>
-              SUSPECT COLOR (VISUAL)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. White, Silver, Red..."
-              value={suspectColor}
-              onChange={(e) => setSuspectColor(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.55rem 0.75rem',
-                backgroundColor: 'var(--bg-secondary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '6px',
-                color: 'var(--text-primary)',
-                fontSize: '0.85rem'
-              }}
-            />
-          </div>
-
-          {/* Suspect Model */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: '700' }}>
-              SUSPECT MODEL / TYPE (VISUAL)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Celerio, Alto, Swift, SUV..."
-              value={suspectModel}
-              onChange={(e) => setSuspectModel(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.55rem 0.75rem',
-                backgroundColor: 'var(--bg-secondary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '6px',
-                color: 'var(--text-primary)',
-                fontSize: '0.85rem'
-              }}
-            />
-          </div>
-
           {/* Target Plate */}
           <div>
             <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: '700' }}>
-              TARGET NUMBER PLATE (OPTIONAL)
+              SEARCH LICENSE PLATE
             </label>
             <input
               type="text"
-              placeholder="e.g. RJ47CA3205"
+              placeholder="e.g. RJ47CA3205 or DL01AB..."
               value={targetPlate}
               onChange={(e) => setTargetPlate(e.target.value.toUpperCase())}
               style={{
@@ -294,8 +278,6 @@ function InvestigationHubPage() {
             onClick={() => {
               setCheckpoint('');
               setTimeWindow('24h');
-              setSuspectColor('');
-              setSuspectModel('');
               setTargetPlate('');
             }}
             style={{
@@ -329,7 +311,7 @@ function InvestigationHubPage() {
               boxShadow: '0 4px 12px rgba(56, 189, 248, 0.25)'
             }}
           >
-            <span>{loading ? 'Scanning Corridor...' : '⚡ Run Forensic Corridor Scan'}</span>
+            <span>{loading ? 'Scanning Corridor Feeds...' : '⚡ Audit Corridor Sightings'}</span>
           </button>
         </div>
       </div>
@@ -350,309 +332,195 @@ function InvestigationHubPage() {
         </div>
       )}
 
-      {/* INVESTIGATION TABS */}
-      <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.25rem' }}>
-        <button
-          onClick={() => setActiveTab('suspects')}
-          style={{
-            padding: '0.75rem 1.25rem',
-            backgroundColor: activeTab === 'suspects' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-            color: activeTab === 'suspects' ? '#f87171' : 'var(--text-secondary)',
-            border: 'none',
-            borderBottom: activeTab === 'suspects' ? '2px solid #ef4444' : '2px solid transparent',
-            fontWeight: '800',
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
-        >
-          <span>🕵️ Plate-Swap / Visual Model Suspects</span>
-          <span style={{ backgroundColor: '#ef4444', color: '#fff', fontSize: '0.75rem', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: '800' }}>
-            {results.visualSuspects.length}
+      {/* SIGHTING AUDIT TABLE */}
+      <div className="card" style={{ padding: '0.5rem', overflowX: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', borderBottom: '1px solid var(--border-color)' }}>
+          <h3 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+            Corridor Sightings Log ({sightings.length} Sightings Audited)
+          </h3>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            Real-time multi-camera audit feed
           </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('exact')}
-          style={{
-            padding: '0.75rem 1.25rem',
-            backgroundColor: activeTab === 'exact' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-            color: activeTab === 'exact' ? 'var(--accent-blue)' : 'var(--text-secondary)',
-            border: 'none',
-            borderBottom: activeTab === 'exact' ? '2px solid var(--accent-blue)' : '2px solid transparent',
-            fontWeight: '800',
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
-        >
-          <span>🎯 Exact Plate Matches</span>
-          <span style={{ backgroundColor: 'var(--accent-blue)', color: '#0b1120', fontSize: '0.75rem', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: '800' }}>
-            {results.exactMatches.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('all')}
-          style={{
-            padding: '0.75rem 1.25rem',
-            backgroundColor: activeTab === 'all' ? 'rgba(100, 116, 139, 0.15)' : 'transparent',
-            color: activeTab === 'all' ? 'var(--text-primary)' : 'var(--text-secondary)',
-            border: 'none',
-            borderBottom: activeTab === 'all' ? '2px solid var(--text-primary)' : '2px solid transparent',
-            fontWeight: '800',
-            fontSize: '0.9rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem'
-          }}
-        >
-          <span>📋 All Corridor Sightings</span>
-          <span style={{ backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', fontSize: '0.75rem', padding: '0.15rem 0.5rem', borderRadius: '9999px', fontWeight: '800' }}>
-            {results.allSightings.length}
-          </span>
-        </button>
-      </div>
-
-      {/* TAB CONTENT */}
-      {loading ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Processing checkpoint feeds and cross-referencing VAHAN registration database...
         </div>
-      ) : activeTab === 'suspects' ? (
-        /* TAB 2: PLATE-SWAP & VISUAL SUSPECTS */
-        <div>
-          {results.visualSuspects.length === 0 ? (
-            <div className="card" style={{ padding: '3rem 1.5rem', textAlign: 'center' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🛡️</div>
-              <h4 style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
-                No Plate-Swap or Visual Discrepancies Detected
-              </h4>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                All camera detections in this time window match their official registered vehicle makes, models, and colors.
-              </p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {results.visualSuspects.map((s, idx) => (
-                <div
-                  key={s.sightingId || idx}
-                  className="card"
-                  style={{
-                    padding: '1.25rem',
-                    border: s.isPlateSwapSuspect ? '1px solid rgba(239, 68, 68, 0.6)' : '1px solid var(--border-color)',
-                    backgroundColor: s.isPlateSwapSuspect ? 'rgba(30, 20, 30, 0.85)' : 'var(--bg-secondary)',
-                    boxShadow: s.isPlateSwapSuspect ? '0 0 16px rgba(239, 68, 68, 0.15)' : 'none'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.85rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <span
-                        onClick={() => setSelectedDossier(s)}
-                        style={{
-                          fontSize: '1.2rem',
-                          fontWeight: '800',
-                          fontFamily: 'monospace',
-                          letterSpacing: '0.05em',
-                          color: '#ffffff',
-                          backgroundColor: '#0f172a',
-                          padding: '0.35rem 0.75rem',
-                          borderRadius: '6px',
-                          border: '1px solid #ef4444',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {s.plateNumber}
-                      </span>
 
-                      {s.isPlateSwapSuspect && (
-                        <span
+        {loading ? (
+          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            Loading corridor camera snapshots and registry records...
+          </div>
+        ) : sightings.length === 0 ? (
+          <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📷</div>
+            <div style={{ fontWeight: '700', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+              No Camera Sightings Found
+            </div>
+            <p style={{ fontSize: '0.85rem', marginTop: '0.25rem' }}>
+              No vehicle movements recorded in this checkpoint and time window.
+            </p>
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                <th style={{ padding: '0.85rem 1rem' }}>Camera Snapshot</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Plate Number</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Checkpoint / Location</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Timestamp</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Direction / Movement</th>
+                <th style={{ padding: '0.85rem 1rem' }}>Registered Owner / Model (VAHAN)</th>
+                <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sightings.map((s, idx) => {
+                const imgPath = s.cropImagePath || s.snapshotUrl;
+                const fullImg = getFullImageUrl(imgPath);
+
+                return (
+                  <tr
+                    key={s.sightingId || idx}
+                    style={{
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                      backgroundColor: s.isStolen ? 'rgba(239, 68, 68, 0.08)' : 'transparent',
+                      transition: 'background-color 0.15s'
+                    }}
+                  >
+                    {/* 1. Camera Snapshot */}
+                    <td style={{ padding: '0.85rem 1rem' }}>
+                      {imgPath ? (
+                        <img
+                          src={fullImg}
+                          alt={`Sighting ${s.plateNumber}`}
+                          onClick={() => setZoomedImage({ src: fullImg, plate: s.plateNumber, camera: s.cameraName })}
                           style={{
-                            fontSize: '0.75rem',
-                            fontWeight: '800',
-                            padding: '0.25rem 0.65rem',
-                            borderRadius: '9999px',
-                            backgroundColor: 'rgba(239, 68, 68, 0.25)',
-                            color: '#f87171',
-                            border: '1px solid rgba(239, 68, 68, 0.6)',
-                            animation: 'pulse 2s infinite'
+                            width: '64px',
+                            height: '44px',
+                            objectFit: 'cover',
+                            borderRadius: '6px',
+                            border: '1px solid var(--border-color)',
+                            cursor: 'pointer',
+                            display: 'block',
+                            transition: 'transform 0.15s'
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                          title="Click to zoom snapshot"
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: '64px',
+                            height: '44px',
+                            borderRadius: '6px',
+                            backgroundColor: 'var(--bg-secondary)',
+                            border: '1px dashed var(--border-color)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.65rem',
+                            color: 'var(--text-muted)'
                           }}
                         >
-                          ⚠️ LIKELY PLATE SWAP / CLONED REGISTRATION
-                        </span>
-                      )}
-
-                      {s.isStolen && (
-                        <span style={{ fontSize: '0.75rem', fontWeight: '800', padding: '0.25rem 0.6rem', borderRadius: '9999px', backgroundColor: '#ef4444', color: '#fff' }}>
-                          🚨 STOLEN
-                        </span>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
-                        onClick={() => setSelectedDossier(s)}
-                        style={{
-                          padding: '0.45rem 0.85rem',
-                          backgroundColor: 'var(--bg-secondary)',
-                          color: 'var(--text-primary)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '6px',
-                          fontWeight: '700',
-                          fontSize: '0.8rem',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        📋 Owner Dossier
-                      </button>
-                      <button
-                        onClick={() => handleTrackRoute(s.plateNumber)}
-                        style={{
-                          padding: '0.45rem 1rem',
-                          backgroundColor: 'var(--accent-blue)',
-                          color: '#0b1120',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontWeight: '800',
-                          fontSize: '0.8rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.3rem'
-                        }}
-                      >
-                        <span>🛰️ Track Route</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Discrepancy Breakdown Box */}
-                  {s.isPlateSwapSuspect && (
-                    <div
-                      style={{
-                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid rgba(239, 68, 68, 0.4)',
-                        padding: '0.75rem 1rem',
-                        borderRadius: '6px',
-                        marginBottom: '1rem',
-                        color: '#fca5a5',
-                        fontSize: '0.85rem',
-                        lineHeight: '1.5'
-                      }}
-                    >
-                      <div style={{ fontWeight: '700', color: '#f87171', marginBottom: '0.2rem' }}>
-                        ⚡ Forensic Discrepancy Analysis:
-                      </div>
-                      {s.discrepancyNote}
-                    </div>
-                  )}
-
-                  {/* Registered vs Detected Comparison Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem' }}>
-                    <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-primary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '700' }}>OFFICIAL VAHAN REGISTRATION</div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
-                        {s.registeredModel}
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        Color: <strong style={{ color: 'var(--text-primary)' }}>{s.registeredColor}</strong> • Owner: <strong style={{ color: 'var(--text-primary)' }}>{s.owner?.name || 'Unregistered'}</strong>
-                      </div>
-                    </div>
-
-                    <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-primary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '700' }}>AI CAMERA SENSORS DETECTED</div>
-                      <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#38bdf8', marginTop: '0.2rem' }}>
-                        {s.detectedModel}
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        Color: <strong style={{ color: 'var(--text-primary)' }}>{s.detectedColor}</strong> • Checkpoint: <strong style={{ color: 'var(--text-primary)' }}>{s.cameraName}</strong>
-                      </div>
-                    </div>
-
-                    <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-primary)', borderRadius: '6px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: '700' }}>DETECTION TIMESTAMP</div>
-                        <div style={{ fontSize: '0.825rem', color: 'var(--text-primary)', fontWeight: '600', marginTop: '0.2rem' }}>
-                          🕒 {s.formattedTime}
+                          <span>📷</span>
+                          <span>No Frame</span>
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#34d399', marginTop: '0.15rem' }}>
-                          ANPR Confidence: {(s.confidence * 100).toFixed(1)}%
-                        </div>
-                      </div>
-
-                      {s.cropImagePath && (
-                        <img
-                          src={s.cropImagePath}
-                          alt="Plate Crop"
-                          style={{ width: '60px', height: '38px', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--border-color)' }}
-                        />
                       )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : activeTab === 'exact' ? (
-        /* TAB 1: EXACT MATCHES */
-        <div className="card" style={{ overflowX: 'auto', padding: '0.5rem' }}>
-          {results.exactMatches.length === 0 ? (
-            <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-              No exact plate matches found for the specified search criteria.
-            </div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '0.75rem 1rem' }}>Plate Number</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Checkpoint & Sector</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Sighting Time</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Vehicle Details</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Owner Info</th>
-                  <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.exactMatches.map((s, idx) => (
-                  <tr key={s.sightingId || idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                    <td style={{ padding: '0.75rem 1rem' }}>
+                    </td>
+
+                    {/* 2. Plate Number */}
+                    <td style={{ padding: '0.85rem 1rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span
+                          onClick={() => setSelectedDossier(s)}
+                          style={{
+                            fontFamily: 'monospace',
+                            fontWeight: '800',
+                            fontSize: '0.95rem',
+                            color: '#ffffff',
+                            backgroundColor: '#0f172a',
+                            padding: '0.25rem 0.55rem',
+                            borderRadius: '4px',
+                            border: s.isStolen ? '1px solid #ef4444' : '1px solid #334155',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {s.plateNumber}
+                        </span>
+                        {s.isStolen && (
+                          <span
+                            style={{
+                              fontSize: '0.65rem',
+                              fontWeight: '800',
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: '9999px',
+                              backgroundColor: '#ef4444',
+                              color: '#fff'
+                            }}
+                          >
+                            STOLEN
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        Conf: {(s.confidence * 100).toFixed(0)}%
+                      </div>
+                    </td>
+
+                    {/* 3. Checkpoint / Location */}
+                    <td style={{ padding: '0.85rem 1rem' }}>
+                      <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>
+                        {s.cameraName || s.locationName}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {s.sector || 'Corridor Checkpoint'} • <span style={{ fontFamily: 'monospace', color: 'var(--accent-blue)' }}>{s.cameraId}</span>
+                      </div>
+                    </td>
+
+                    {/* 4. Timestamp */}
+                    <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)' }}>
+                      <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                        {s.formattedTime || formatTimestamp(s.timestamp)}
+                      </div>
+                    </td>
+
+                    {/* 5. Direction / Movement */}
+                    <td style={{ padding: '0.85rem 1rem' }}>
                       <span
-                        onClick={() => setSelectedDossier(s)}
                         style={{
-                          fontFamily: 'monospace',
-                          fontWeight: '800',
-                          color: '#fff',
-                          backgroundColor: '#0f172a',
-                          padding: '0.2rem 0.5rem',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          padding: '0.2rem 0.55rem',
                           borderRadius: '4px',
-                          border: s.isStolen ? '1px solid #ef4444' : '1px solid var(--border-color)',
-                          cursor: 'pointer'
+                          backgroundColor: s.direction === 'OUTBOUND' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+                          color: s.direction === 'OUTBOUND' ? '#fbbf24' : 'var(--accent-blue)',
+                          border: `1px solid ${s.direction === 'OUTBOUND' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(56, 189, 248, 0.3)'}`
                         }}
                       >
-                        {s.plateNumber}
+                        {s.direction || 'INBOUND'}
                       </span>
                     </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{s.cameraName}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{s.sector}</div>
+
+                    {/* 6. Registered Owner / Model (Official VAHAN) */}
+                    <td style={{ padding: '0.85rem 1rem' }}>
+                      {s.isRegistered ? (
+                        <div>
+                          <div style={{ fontWeight: '700', color: 'var(--text-primary)' }}>
+                            {s.registeredModel} {s.registeredColor !== 'N/A' && `(${s.registeredColor})`}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            Owner: <strong style={{ color: 'var(--text-secondary)' }}>{s.owner?.name || 'Registered Owner'}</strong>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                          Unregistered in VAHAN
+                        </div>
+                      )}
                     </td>
-                    <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{s.formattedTime}</td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <div>{s.registeredModel || s.detectedModel}</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Color: {s.registeredColor || s.detectedColor}</div>
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <div>{s.owner?.name || 'Unregistered'}</div>
-                      {s.owner?.phone && <div style={{ fontSize: '0.75rem', color: '#38bdf8' }}>{s.owner.phone}</div>}
-                    </td>
-                    <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '0.35rem' }}>
+
+                    {/* 7. Actions */}
+                    <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '0.4rem' }}>
                         <button
                           onClick={() => setSelectedDossier(s)}
                           style={{
@@ -666,96 +534,92 @@ function InvestigationHubPage() {
                             cursor: 'pointer'
                           }}
                         >
-                          Dossier
+                          📋 Dossier
                         </button>
                         <button
                           onClick={() => handleTrackRoute(s.plateNumber)}
                           style={{
                             padding: '0.35rem 0.75rem',
                             fontSize: '0.75rem',
-                            fontWeight: '700',
+                            fontWeight: '800',
                             backgroundColor: 'var(--accent-blue)',
                             color: '#0b1120',
                             border: 'none',
                             borderRadius: '4px',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.3rem'
                           }}
                         >
-                          🛰️ Track
+                          <span>🛰️ Track Route</span>
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      ) : (
-        /* TAB 3: ALL SIGHTINGS */
-        <div className="card" style={{ overflowX: 'auto', padding: '0.5rem' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '0.75rem 1rem' }}>Plate</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Checkpoint</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Timestamp</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Detected Vehicle</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Registered Vehicle</th>
-                <th style={{ padding: '0.75rem 1rem' }}>Fraud Flag</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.allSightings.map((s, idx) => (
-                <tr key={s.sightingId || idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                  <td style={{ padding: '0.75rem 1rem' }}>
-                    <span
-                      onClick={() => setSelectedDossier(s)}
-                      style={{
-                        fontFamily: 'monospace',
-                        fontWeight: '700',
-                        color: 'var(--accent-blue)',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {s.plateNumber}
-                    </span>
-                  </td>
-                  <td style={{ padding: '0.75rem 1rem' }}>{s.cameraName}</td>
-                  <td style={{ padding: '0.75rem 1rem', color: 'var(--text-secondary)' }}>{s.formattedTime}</td>
-                  <td style={{ padding: '0.75rem 1rem' }}>{s.detectedColor} {s.detectedModel}</td>
-                  <td style={{ padding: '0.75rem 1rem' }}>{s.registeredColor} {s.registeredModel}</td>
-                  <td style={{ padding: '0.75rem 1rem' }}>
-                    {s.isPlateSwapSuspect ? (
-                      <span style={{ fontSize: '0.7rem', fontWeight: '800', color: '#f87171', backgroundColor: 'rgba(239, 68, 68, 0.15)', padding: '0.2rem 0.45rem', borderRadius: '4px' }}>
-                        PLATE SWAP
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#34d399' }}>✓ MATCH</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                    <button
-                      onClick={() => handleTrackRoute(s.plateNumber)}
-                      style={{
-                        padding: '0.3rem 0.65rem',
-                        fontSize: '0.75rem',
-                        fontWeight: '700',
-                        backgroundColor: 'var(--accent-blue)',
-                        color: '#0b1120',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      🛰️ Track
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* SNAPSHOT ZOOM MODAL */}
+      {zoomedImage && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2500,
+            padding: '1.5rem'
+          }}
+          onClick={() => setZoomedImage(null)}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '800px',
+              width: '100%',
+              backgroundColor: '#0f172a',
+              padding: '1.25rem',
+              borderRadius: '12px',
+              border: '1px solid var(--border-color)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1rem'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h4 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+                  Camera Sighting Snapshot: <span style={{ fontFamily: 'monospace', color: 'var(--accent-blue)' }}>{zoomedImage.plate}</span>
+                </h4>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Location: {zoomedImage.camera}
+                </div>
+              </div>
+              <button
+                onClick={() => setZoomedImage(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '1.5rem', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ backgroundColor: '#000', borderRadius: '8px', overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', maxHeight: '65vh' }}>
+              <img
+                src={zoomedImage.src}
+                alt="Zoomed Camera Snapshot"
+                style={{ maxWidth: '100%', maxHeight: '65vh', objectFit: 'contain' }}
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -770,7 +634,7 @@ function InvestigationHubPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
+            zIndex: 2000,
             padding: '1rem'
           }}
           onClick={() => setSelectedDossier(null)}
@@ -805,35 +669,29 @@ function InvestigationHubPage() {
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
-              <div style={{ padding: '0.85rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>LICENSE PLATE</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: '800', fontFamily: 'monospace', color: 'var(--accent-blue)', marginTop: '0.2rem' }}>
-                  {selectedDossier.plateNumber}
-                </div>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <span
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: '1.4rem',
+                  fontWeight: '800',
+                  color: '#fff',
+                  backgroundColor: '#1e293b',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '6px',
+                  border: selectedDossier.isStolen ? '1px solid #ef4444' : '1px solid var(--border-color)'
+                }}
+              >
+                {selectedDossier.plateNumber}
+              </span>
+              {selectedDossier.isStolen && (
+                <span style={{ fontSize: '0.8rem', fontWeight: '800', padding: '0.3rem 0.75rem', borderRadius: '9999px', backgroundColor: 'rgba(239, 68, 68, 0.25)', color: '#f87171', border: '1px solid #ef4444' }}>
+                  🚨 ACTIVE STOLEN VEHICLE
+                </span>
+              )}
+            </div>
 
-              <div style={{ padding: '0.85rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>REGISTERED OWNER</div>
-                <div style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
-                  {selectedDossier.owner?.name || 'Unregistered / Unknown'}
-                </div>
-              </div>
-
-              <div style={{ padding: '0.85rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CONTACT PHONE</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#38bdf8', marginTop: '0.2rem' }}>
-                  {selectedDossier.owner?.phone || '+91 98765 43210'}
-                </div>
-              </div>
-
-              <div style={{ padding: '0.85rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CONTACT EMAIL</div>
-                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                  {selectedDossier.owner?.email || 'N/A'}
-                </div>
-              </div>
-
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
               <div style={{ padding: '0.85rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>REGISTERED MAKE & MODEL</div>
                 <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
@@ -842,33 +700,31 @@ function InvestigationHubPage() {
               </div>
 
               <div style={{ padding: '0.85rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>REGISTERED COLOR</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>OFFICIAL COLOR</div>
                 <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
                   {selectedDossier.registeredColor}
                 </div>
               </div>
+
+              <div style={{ padding: '0.85rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>REGISTERED OWNER</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
+                  {selectedDossier.owner?.name || 'Unregistered in VAHAN'}
+                </div>
+              </div>
+
+              <div style={{ padding: '0.85rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CONTACT TELEPHONE</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--accent-blue)', marginTop: '0.2rem' }}>
+                  {selectedDossier.owner?.phone || 'N/A'}
+                </div>
+              </div>
             </div>
 
-            {selectedDossier.rcDocumentUrl && (
-              <div style={{ padding: '0.85rem', backgroundColor: 'rgba(56, 189, 248, 0.1)', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.3)', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-primary)' }}>
-                  📄 Registration Certificate (RC) Document
-                </span>
-                <a
-                  href={selectedDossier.rcDocumentUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'var(--accent-blue)', fontWeight: '700', fontSize: '0.85rem', textDecoration: 'underline' }}
-                >
-                  Download / View PDF
-                </a>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
               <button
                 onClick={() => setSelectedDossier(null)}
-                style={{ padding: '0.5rem 1rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}
+                style={{ padding: '0.55rem 1.2rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', fontWeight: '600', cursor: 'pointer' }}
               >
                 Close
               </button>
@@ -878,9 +734,9 @@ function InvestigationHubPage() {
                   setSelectedDossier(null);
                   handleTrackRoute(plate);
                 }}
-                style={{ padding: '0.5rem 1.25rem', backgroundColor: 'var(--accent-blue)', color: '#0b1120', border: 'none', borderRadius: '6px', fontWeight: '800', fontSize: '0.85rem', cursor: 'pointer' }}
+                style={{ padding: '0.55rem 1.4rem', backgroundColor: 'var(--accent-blue)', color: '#0b1120', border: 'none', borderRadius: '6px', fontWeight: '800', cursor: 'pointer' }}
               >
-                🛰️ Start Live Trajectory Tracking
+                🛰️ Track Trajectory on Map
               </button>
             </div>
           </div>

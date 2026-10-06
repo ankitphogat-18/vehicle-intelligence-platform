@@ -5,10 +5,19 @@ function AlertsPage() {
   const navigate = useNavigate();
   const [stolenAlerts, setStolenAlerts] = useState([]);
   const [anomalyAlerts, setAnomalyAlerts] = useState([]);
+  const [activeIncidents, setActiveIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem('user') || '{}');
+  } catch (e) {
+    user = {};
+  }
+  const isPoliceOrAdmin = user?.role === 'POLICE' || user?.role === 'ADMIN';
 
   // Active Interactive Popover / Modal state
   const [selectedAlert, setSelectedAlert] = useState(null);
@@ -28,19 +37,25 @@ function AlertsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [stolenRes, anomalyRes] = await Promise.all([
+      const [stolenRes, anomalyRes, incidentsRes] = await Promise.all([
         fetch('/api/alerts/active', { headers: getAuthHeaders() }),
-        fetch('/api/alerts')
+        fetch('/api/alerts?status=ACTIVE'),
+        fetch('/api/incidents?status=ACTIVE', { headers: getAuthHeaders() })
       ]);
 
       const stolenJson = await stolenRes.json();
       const anomalyJson = await anomalyRes.json();
+      const incidentsJson = await incidentsRes.json();
 
       if (stolenJson.success) {
         setStolenAlerts(stolenJson.data || []);
       }
       if (anomalyJson.success) {
         setAnomalyAlerts(anomalyJson.data || []);
+      }
+      if (incidentsJson.success) {
+        const rawInc = incidentsJson.data || incidentsJson.incidents || [];
+        setActiveIncidents(rawInc.filter((inc) => inc.status !== 'RESOLVED'));
       }
     } catch (err) {
       setError(err.message);
@@ -98,6 +113,33 @@ function AlertsPage() {
       if (selectedAlert?._id === alertId) {
         setSelectedAlert(null);
       }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleResolveIncident = async (incidentId, title) => {
+    setActionLoadingId(incidentId);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const res = await fetch(`/api/incidents/${incidentId}`, {
+        method: 'PATCH',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ status: 'RESOLVED' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || data.error || 'Failed to resolve incident');
+      }
+
+      // Immediately remove from active incidents state
+      setActiveIncidents((prev) => prev.filter((inc) => inc._id !== incidentId));
+      // Also remove any matching alert from stolenAlerts
+      setStolenAlerts((prev) => prev.filter((a) => a.incidentId !== incidentId && a._id !== incidentId));
+      setSuccessMsg(`Incident "${title || 'Emergency Accident'}" resolved & cleared from live radar feed.`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -190,12 +232,251 @@ function AlertsPage() {
         </div>
       )}
 
-      {/* SECTION 1: ACTIVE STOLEN VEHICLE ALERTS */}
+      {/* SECTION 1: EMERGENCY REPORTED INCIDENTS & ACCIDENTS */}
+      {(() => {
+        // Deduplicate and combine active incidents and accident alerts
+        const incidentMap = new Map();
+        activeIncidents.forEach((inc) => {
+          if (inc.status !== 'RESOLVED') {
+            incidentMap.set(String(inc._id), inc);
+          }
+        });
+
+        stolenAlerts.forEach((a) => {
+          if (a.status === 'ACTIVE' && (a.type === 'ACCIDENT_REPORTED' || a.type === 'HIT_AND_RUN' || a.incidentId)) {
+            const key = a.incidentId ? String(a.incidentId) : String(a._id);
+            if (!incidentMap.has(key)) {
+              incidentMap.set(key, {
+                _id: a.incidentId || a._id,
+                alertId: a._id,
+                incidentType: a.type === 'HIT_AND_RUN' ? 'HIT_AND_RUN' : 'ACCIDENT',
+                locationName: a.locationName || 'Chandigarh Expressway',
+                cameraId: a.cameraId || 'CAM-CHD-01',
+                latitude: a.latitude,
+                longitude: a.longitude,
+                description: a.description || a.message,
+                photoUrl: a.photoUrl || a.evidencePhotoUrl,
+                evidencePhotoUrl: a.evidencePhotoUrl || a.photoUrl,
+                reportedBy: a.reportedBy,
+                createdAt: a.createdAt || a.timestamp
+              });
+            }
+          }
+        });
+
+        const emergencyList = Array.from(incidentMap.values());
+
+        return (
+          <section style={{ marginBottom: '2.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1rem' }}>
+              <span style={{ fontSize: '1.3rem' }}>⚠️</span>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ef4444' }}>
+                Emergency Incidents & Accident Alarms ({emergencyList.length})
+              </h3>
+            </div>
+
+            {emergencyList.length === 0 ? (
+              <div className="card" style={{ textAlign: 'center', padding: '1.75rem', backgroundColor: 'rgba(15, 23, 42, 0.6)' }}>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  ✅ No active emergency highway accidents or hazard alarms reported.
+                </span>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '1.25rem' }}>
+                {emergencyList.map((incident) => {
+                  const rawPhoto = incident.photoUrl || incident.evidencePhotoUrl;
+                  const fullPhoto = rawPhoto
+                    ? rawPhoto.startsWith('http')
+                      ? rawPhoto
+                      : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}${rawPhoto.startsWith('/') ? '' : '/'}${rawPhoto}`
+                    : null;
+
+                  return (
+                    <div
+                      key={incident._id}
+                      className="card"
+                      style={{
+                        padding: '1.5rem',
+                        border: '1px solid rgba(239, 68, 68, 0.6)',
+                        backgroundColor: 'rgba(40, 15, 20, 0.85)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        boxShadow: '0 0 20px rgba(239, 68, 68, 0.2)'
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: '4px',
+                          background: 'linear-gradient(90deg, #ef4444, #dc2626, #f59e0b)'
+                        }}
+                      />
+
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                          <span
+                            style={{
+                              fontSize: '0.75rem',
+                              fontWeight: '800',
+                              padding: '0.25rem 0.65rem',
+                              borderRadius: '9999px',
+                              backgroundColor: 'rgba(239, 68, 68, 0.35)',
+                              color: '#ffffff',
+                              border: '1px solid #ef4444',
+                              animation: 'pulse 1.5s infinite',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem'
+                            }}
+                          >
+                            <span>🚨</span>
+                            <span>CRITICAL EMERGENCY INCIDENT</span>
+                          </span>
+
+                          <span style={{ fontSize: '0.75rem', color: '#fca5a5', fontWeight: '700' }}>
+                            {incident.cameraId || 'CAM-CHD-01'}
+                          </span>
+                        </div>
+
+                        <h4 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#ffffff', marginBottom: '0.4rem' }}>
+                          🚨 {incident.incidentType === 'HIT_AND_RUN' ? 'Hit & Run Incident' : incident.type || 'Highway Accident / Crash'}
+                        </h4>
+
+                        <p style={{ fontSize: '0.875rem', color: '#e2e8f0', margin: '0 0 0.85rem 0', lineHeight: 1.5 }}>
+                          {incident.description || incident.message || 'Emergency accident reported by patrol unit.'}
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
+                          <span style={{ fontSize: '0.78rem', backgroundColor: 'rgba(15, 23, 42, 0.8)', padding: '0.25rem 0.6rem', borderRadius: '4px', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                            📍 Location: <strong style={{ color: '#ffffff' }}>{incident.locationName || 'Chandigarh Expressway'}</strong>
+                          </span>
+                          {incident.latitude && incident.longitude && (
+                            <span style={{ fontSize: '0.78rem', backgroundColor: 'rgba(15, 23, 42, 0.8)', padding: '0.25rem 0.6rem', borderRadius: '4px', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                              🎯 GPS: {Number(incident.latitude).toFixed(4)}°N, {Number(incident.longitude).toFixed(4)}°E
+                            </span>
+                          )}
+                          <span style={{ fontSize: '0.78rem', backgroundColor: 'rgba(15, 23, 42, 0.8)', padding: '0.25rem 0.6rem', borderRadius: '4px', color: '#cbd5e1', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                            👤 Reported by: <strong style={{ color: '#ffffff' }}>{incident.reportedBy?.name || 'Patrol Unit'}</strong>
+                          </span>
+                        </div>
+
+                        {fullPhoto && (
+                          <div style={{ marginBottom: '0.85rem' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: '700' }}>FIELD EVIDENCE PHOTO:</div>
+                            <a href={fullPhoto} target="_blank" rel="noreferrer">
+                              <img
+                                src={fullPhoto}
+                                alt="Incident Evidence"
+                                className="w-16 h-12 object-cover rounded"
+                                style={{ width: '100%', maxHeight: '140px', objectFit: 'cover', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.4)' }}
+                              />
+                            </a>
+                          </div>
+                        )}
+
+                        <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                          ⏱ Incident Timestamp: {formatTimestamp(incident.createdAt || incident.timestamp)}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(239, 68, 68, 0.25)', flexWrap: 'wrap' }}>
+                        <button
+                          disabled={actionLoadingId === incident._id}
+                          onClick={() => handleResolveIncident(incident._id, incident.incidentType || 'Highway Incident')}
+                          style={{
+                            flex: '1 1 120px',
+                            padding: '0.55rem',
+                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                            color: '#34d399',
+                            border: '1px solid rgba(16, 185, 129, 0.4)',
+                            borderRadius: '6px',
+                            fontWeight: '700',
+                            fontSize: '0.8rem',
+                            cursor: actionLoadingId === incident._id ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.3rem'
+                          }}
+                        >
+                          <span>✅ Resolve & Clear Incident</span>
+                        </button>
+
+                        {isPoliceOrAdmin && (
+                          <button
+                            onClick={() => {
+                              const cp = incident.cameraId || 'CAM-CHD-01';
+                              navigate(`/investigation?checkpoint=${encodeURIComponent(cp)}`);
+                            }}
+                            style={{
+                              flex: '1 1 120px',
+                              padding: '0.55rem',
+                              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+                              color: '#38bdf8',
+                              border: '1px solid rgba(56, 189, 248, 0.4)',
+                              borderRadius: '6px',
+                              fontWeight: '700',
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.35rem'
+                            }}
+                          >
+                            <span>🔍 Investigate Incident</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            if (incident.latitude && incident.longitude) {
+                              navigate(`/map?lat=${incident.latitude}&lng=${incident.longitude}`);
+                            } else {
+                              navigate('/map');
+                            }
+                          }}
+                          style={{
+                            flex: '1 1 120px',
+                            padding: '0.55rem',
+                            backgroundColor: '#ef4444',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontWeight: '800',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.35rem',
+                            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)'
+                          }}
+                        >
+                          <span>📍 View on Radar Map</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        );
+      })()}
+
+      {/* SECTION 2: ACTIVE STOLEN VEHICLE ALERTS */}
       <section style={{ marginBottom: '2.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1rem' }}>
           <span style={{ fontSize: '1.3rem' }}>🚨</span>
           <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#f87171' }}>
-            Active Hotlist & Stolen Vehicles ({stolenAlerts.length})
+            Active Hotlist & Stolen Vehicles ({stolenAlerts.filter(a => a.type !== 'ACCIDENT_REPORTED' && a.type !== 'HIT_AND_RUN' && !a.incidentId).length})
           </h3>
         </div>
 
@@ -203,7 +484,7 @@ function AlertsPage() {
           <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
             Retrieving live surveillance alerts...
           </div>
-        ) : stolenAlerts.length === 0 ? (
+        ) : stolenAlerts.filter(a => a.type !== 'ACCIDENT_REPORTED' && a.type !== 'HIT_AND_RUN' && !a.incidentId).length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '2.5rem 1.5rem' }}>
             <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🛡️</div>
             <h4 style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '0.25rem' }}>No Active Stolen Vehicle Alerts</h4>
@@ -213,7 +494,7 @@ function AlertsPage() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.25rem' }}>
-            {stolenAlerts.map((alert) => {
+            {stolenAlerts.filter(a => a.type !== 'ACCIDENT_REPORTED' && a.type !== 'HIT_AND_RUN' && !a.incidentId).map((alert) => {
               const veh = alert.vehicle || {};
               const owner = alert.reportedBy || veh.ownerId || {};
 

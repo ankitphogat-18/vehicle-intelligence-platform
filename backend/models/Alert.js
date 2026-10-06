@@ -6,6 +6,12 @@ const alertSchema = new mongoose.Schema(
       type: String,
       default: 'STOLEN_VEHICLE',
     },
+    title: {
+      type: String,
+    },
+    message: {
+      type: String,
+    },
     severity: {
       type: String,
       enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
@@ -16,7 +22,7 @@ const alertSchema = new mongoose.Schema(
     },
     plateNumber: {
       type: String,
-      required: true,
+      required: false,
       uppercase: true,
       index: true,
     },
@@ -33,6 +39,23 @@ const alertSchema = new mongoose.Schema(
     },
     cameraId: {
       type: String,
+    },
+    latitude: {
+      type: Number,
+    },
+    longitude: {
+      type: Number,
+    },
+    photoUrl: {
+      type: String,
+    },
+    evidencePhotoUrl: {
+      type: String,
+    },
+    incidentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Incident',
+      required: false,
     },
     reportedBy: {
       type: mongoose.Schema.Types.ObjectId,

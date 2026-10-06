@@ -6,6 +6,7 @@ const VehicleSighting = require('../models/VehicleSighting');
 const Vehicle = require('../models/Vehicle');
 const Camera = require('../models/Camera');
 const Alert = require('../models/Alert');
+const SecurityZone = require('../models/SecurityZone');
 
 // GET /api/detections - Retrieve simulated vehicle observations
 router.get('/', async (req, res, next) => {
@@ -129,15 +130,52 @@ router.post('/', async (req, res, next) => {
 
     const triggeredAlerts = [];
 
-    // Check Rule 1: Restricted Zone Breach
-    if (camera && camera.isRestricted) {
+    // Check Security Zone Enforcement & Level Escalation
+    let activeZone = null;
+    try {
+      activeZone = await SecurityZone.findOne({
+        status: 'ACTIVE',
+        cameraIds: camId
+      }).lean();
+    } catch (zErr) {
+      console.warn('[SecurityZone lookup warn]:', zErr.message);
+    }
+
+    const securityLevel = camera?.currentSecurityLevel || activeZone?.level || (camera?.isRestricted ? 'LEVEL_2_EXCLUSION' : 'NORMAL');
+    const zoneName = activeZone?.name || camera?.sector || 'High-Security Perimeter';
+
+    if (securityLevel === 'LEVEL_1_BUFFER') {
+      const bufferAlert = new Alert({
+        type: 'BUFFER_ZONE_WARNING',
+        severity: 'MEDIUM',
+        title: `🟡 Warning: Level-1 Buffer Entry (${zoneName})`,
+        message: `🟡 Warning: Vehicle ${rawPlate} entered Level-1 Buffer of ${zoneName}. Early naka diversion advised.`,
+        description: `🟡 Warning: Vehicle ${rawPlate} entered Level-1 Buffer of ${zoneName}. Early naka diversion advised.`,
+        plateNumber: rawPlate,
+        locationName: camLocation,
+        cameraId: camId,
+        latitude: camera?.latitude,
+        longitude: camera?.longitude,
+        vehicleDetails: {
+          makeModel: vehicle ? vehicle.makeModel : visualModel,
+          color: vehicle ? vehicle.color : visualColor
+        },
+        status: 'ACTIVE'
+      });
+      await bufferAlert.save();
+      triggeredAlerts.push(bufferAlert);
+    } else if (securityLevel === 'LEVEL_2_EXCLUSION') {
       const breachAlert = new Alert({
         type: 'RESTRICTED_ZONE_BREACH',
         severity: 'CRITICAL',
+        title: `🔴 CRITICAL: Zero-Tolerance Breach (${zoneName})`,
+        message: `🔴 CRITICAL: Zero-tolerance breach in ${zoneName}! Unauthorized vehicle ${rawPlate} detected at barrier.`,
+        description: `🔴 CRITICAL: Zero-tolerance breach in ${zoneName}! Unauthorized vehicle ${rawPlate} detected at barrier.`,
         plateNumber: rawPlate,
-        description: `High-Security Restricted Zone breach detected at ${camLocation} (${camId}) for vehicle ${rawPlate}.`,
         locationName: camLocation,
         cameraId: camId,
+        latitude: camera?.latitude,
+        longitude: camera?.longitude,
         vehicleDetails: {
           makeModel: vehicle ? vehicle.makeModel : visualModel,
           color: vehicle ? vehicle.color : visualColor

@@ -9,8 +9,8 @@ const Alert = require('../models/Alert');
 
 /**
  * GET /api/investigations/corridor-search
- * Corridor & Plate-Swap Search Endpoint
- * Query params: locationName, startTime, endTime, suspectColor, suspectModel, plateNumber
+ * Spatio-Temporal Corridor Sighting Audit Endpoint
+ * Query params: locationName, startTime, endTime, plateNumber
  */
 router.get('/corridor-search', async (req, res, next) => {
   try {
@@ -18,8 +18,6 @@ router.get('/corridor-search', async (req, res, next) => {
       locationName,
       startTime,
       endTime,
-      suspectColor,
-      suspectModel,
       plateNumber
     } = req.query;
 
@@ -48,7 +46,7 @@ router.get('/corridor-search', async (req, res, next) => {
         .map((c) => c.cameraId.toUpperCase());
     }
 
-    // 1. Query Sightings
+    // 1. Query Sightings from Sighting collection
     let sightingFilter = { ...timeQuery };
     if (matchedCameraIds && matchedCameraIds.length > 0) {
       sightingFilter.cameraId = { $in: matchedCameraIds };
@@ -65,10 +63,10 @@ router.get('/corridor-search', async (req, res, next) => {
 
     let rawSightings = await Sighting.find(sightingFilter).sort({ timestamp: -1 }).lean();
 
-    // Also query VehicleSighting for comprehensive coverage
+    // Also query VehicleSighting for full surveillance audit coverage
     let vsSightings = await VehicleSighting.find(sightingFilter).sort({ timestamp: -1 }).lean();
 
-    // Merge and deduplicate by plate + cameraId + timestamp (within 30 sec)
+    // Merge and deduplicate by plate + cameraId + timestamp
     const combined = [...rawSightings];
     const seen = new Set(rawSightings.map((s) => `${s.plateNumber}_${s.cameraId}_${new Date(s.timestamp).getTime()}`));
 
@@ -83,85 +81,32 @@ router.get('/corridor-search', async (req, res, next) => {
           locationName: vs.locationName || `Checkpoint ${vs.cameraId}`,
           timestamp: vs.timestamp,
           confidence: vs.plateConfidence || 0.95,
-          vehicleModel: vs.vehicleModel || vs.vehicleMake || vs.vehicleType || 'SEDAN',
-          vehicleColor: vs.vehicleColor || 'White',
           direction: vs.direction || 'INBOUND',
-          cropImagePath: null
+          cropImagePath: vs.cropImagePath || null,
+          snapshotUrl: vs.cropImagePath || null
         });
       }
     }
 
+    // Sort all chronologically descending
+    combined.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
     // Fetch active stolen alerts
     const activeAlerts = await Alert.find({ status: 'ACTIVE' }).lean();
-    const activeStolenPlates = new Set(activeAlerts.map((a) => a.plateNumber.toUpperCase()));
+    const activeStolenPlates = new Set(activeAlerts.map((a) => (a.plateNumber || '').toUpperCase()));
 
-    // 2. Cross-reference Vehicle collection and Detect Plate-Swap / Forgery
+    // 2. Cross-reference Vehicle collection for official VAHAN registry data
     const enrichedSightings = await Promise.all(
       combined.map(async (s) => {
-        const plate = s.plateNumber.toUpperCase().trim();
-        const cam = cameraMap.get(s.cameraId.toUpperCase());
+        const plate = (s.plateNumber || '').toUpperCase().trim();
+        const cam = cameraMap.get((s.cameraId || '').toUpperCase());
 
-        // Find registered vehicle
+        // Find registered vehicle in official VAHAN collection
         const vehicle = await Vehicle.findOne({ plateNumber: plate })
           .populate('ownerId', 'name email phone')
           .lean();
 
-        const detectedColor = (s.vehicleColor || s.color || 'White').trim();
-        const detectedModel = (s.vehicleModel || s.model || s.vehicleType || 'Sedan').trim();
-
-        let isPlateSwapSuspect = false;
-        let isUnregisteredPlate = false;
-        const discrepancyReasons = [];
-
-        if (vehicle) {
-          const regColor = (vehicle.color || '').trim();
-          const regModel = (vehicle.makeModel || '').trim();
-
-          // Compare colors (case-insensitive substring check)
-          if (
-            regColor &&
-            detectedColor &&
-            !regColor.toLowerCase().includes(detectedColor.toLowerCase()) &&
-            !detectedColor.toLowerCase().includes(regColor.toLowerCase())
-          ) {
-            isPlateSwapSuspect = true;
-            discrepancyReasons.push(
-              `Color Mismatch: Plate ${plate} is officially registered as "${regColor}", but Camera detected "${detectedColor}".`
-            );
-          }
-
-          // Compare models
-          if (
-            regModel &&
-            detectedModel &&
-            !regModel.toLowerCase().includes(detectedModel.toLowerCase()) &&
-            !detectedModel.toLowerCase().includes(regModel.toLowerCase())
-          ) {
-            isPlateSwapSuspect = true;
-            discrepancyReasons.push(
-              `Body / Model Mismatch: Plate ${plate} is registered to "${regModel}", but Camera detected "${detectedModel}".`
-            );
-          }
-        } else {
-          // Plate not found in official registry
-          isUnregisteredPlate = true;
-          // If suspect physical filters were provided and match
-          if (
-            (suspectColor && detectedColor.toLowerCase().includes(suspectColor.toLowerCase())) ||
-            (suspectModel && detectedModel.toLowerCase().includes(suspectModel.toLowerCase()))
-          ) {
-            isPlateSwapSuspect = true;
-            discrepancyReasons.push(
-              `Unregistered Plate: Plate ${plate} is not registered in VAHAN records, but vehicle body matches suspect profile (${detectedColor} ${detectedModel}).`
-            );
-          }
-        }
-
         const isStolen = activeStolenPlates.has(plate) || (vehicle && vehicle.isStolen);
-        if (isStolen) {
-          discrepancyReasons.push(`Hotlist Alert: Vehicle ${plate} is reported stolen.`);
-        }
-
         const d = new Date(s.timestamp);
         const formattedTime = `${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, ${d.toLocaleDateString()}`;
 
@@ -177,15 +122,14 @@ router.get('/corridor-search', async (req, res, next) => {
           timestamp: s.timestamp,
           formattedTime,
           confidence: s.confidence || 0.95,
-          cropImagePath: s.cropImagePath || null,
-          detectedColor,
-          detectedModel,
+          cropImagePath: s.cropImagePath || s.snapshotUrl || null,
+          snapshotUrl: s.cropImagePath || s.snapshotUrl || null,
           direction: s.direction || 'INBOUND',
 
-          // Registered Details
+          // Official Registered Details from Database (No AI Guessing)
           isRegistered: !!vehicle,
-          registeredModel: vehicle ? vehicle.makeModel : 'Unregistered',
-          registeredColor: vehicle ? vehicle.color : 'Unregistered',
+          registeredModel: vehicle ? vehicle.makeModel : 'Unregistered Vehicle',
+          registeredColor: vehicle ? vehicle.color : 'N/A',
           verificationStatus: vehicle ? vehicle.verificationStatus : 'UNREGISTERED',
           rcDocumentUrl: vehicle ? vehicle.rcDocumentUrl : null,
           policeCaseStatus: vehicle ? vehicle.policeCaseStatus : 'NOT_REPORTED',
@@ -197,40 +141,10 @@ router.get('/corridor-search', async (req, res, next) => {
               }
             : null,
           chalaanCount: vehicle?.chalaanHistory ? vehicle.chalaanHistory.length : 0,
-
-          // Fraud & Plate-Swap Flags
-          isPlateSwapSuspect,
-          isUnregisteredPlate,
-          isStolen,
-          discrepancyReasons,
-          discrepancyNote: discrepancyReasons.join(' | ')
+          isStolen
         };
       })
     );
-
-    // Filter into subsets
-    const exactMatches = enrichedSightings.filter((s) => {
-      if (plateNumber && plateNumber.trim()) {
-        return s.plateNumber.includes(plateNumber.trim().toUpperCase());
-      }
-      return s.isStolen;
-    });
-
-    const visualSuspects = enrichedSightings.filter((s) => {
-      let matchesFilter = true;
-      if (suspectColor && suspectColor.trim()) {
-        matchesFilter =
-          matchesFilter &&
-          s.detectedColor.toLowerCase().includes(suspectColor.trim().toLowerCase());
-      }
-      if (suspectModel && suspectModel.trim()) {
-        matchesFilter =
-          matchesFilter &&
-          (s.detectedModel.toLowerCase().includes(suspectModel.trim().toLowerCase()) ||
-            s.registeredModel.toLowerCase().includes(suspectModel.trim().toLowerCase()));
-      }
-      return s.isPlateSwapSuspect || (suspectColor || suspectModel ? matchesFilter : false);
-    });
 
     res.json({
       success: true,
@@ -239,13 +153,11 @@ router.get('/corridor-search', async (req, res, next) => {
         locationName: locationName || 'All Checkpoints',
         startTime: start,
         endTime: end,
-        suspectColor: suspectColor || null,
-        suspectModel: suspectModel || null,
         plateNumber: plateNumber || null
       },
-      exactMatches,
-      visualSuspects,
-      allSightings: enrichedSightings
+      sightings: enrichedSightings,
+      allSightings: enrichedSightings,
+      exactMatches: enrichedSightings.filter((s) => s.isStolen || (plateNumber && s.plateNumber.includes(plateNumber.trim().toUpperCase())))
     });
   } catch (err) {
     next(err);

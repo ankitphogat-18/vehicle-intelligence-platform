@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Incident = require('../models/Incident');
+const Alert = require('../models/Alert');
 const Sighting = require('../models/Sighting');
 const VehicleSighting = require('../models/VehicleSighting');
 const Detection = require('../models/Detection');
@@ -111,10 +112,35 @@ async function processIncidentReport(req, res, next) {
 
     const savedIncident = await newIncident.save();
 
+    // Automatically create and sync an active Alert for the live radar & alert feed
+    let createdAlert = null;
+    try {
+      createdAlert = await Alert.create({
+        type: 'ACCIDENT_REPORTED',
+        severity: 'CRITICAL',
+        title: `🚨 Emergency Incident: ${incidentType === 'HIT_AND_RUN' ? 'Hit & Run Incident' : 'Highway Accident / Crash'}`,
+        description: `${description || 'Emergency accident reported by patrol team'} at ${savedIncident.locationName || 'Highway Checkpoint'}.`,
+        message: `${description || 'Emergency accident reported by patrol team'} at ${savedIncident.locationName || 'Highway Checkpoint'}.`,
+        locationName: savedIncident.locationName || 'Chandigarh Expressway Corridor',
+        latitude: savedIncident.latitude,
+        longitude: savedIncident.longitude,
+        photoUrl: evidencePhotoUrl,
+        evidencePhotoUrl: evidencePhotoUrl,
+        cameraId: cameraId ? cameraId.trim().toUpperCase() : 'CAM-CHD-01',
+        reportedBy: req.user.id,
+        incidentId: savedIncident._id,
+        timestamp: new Date(),
+        status: 'ACTIVE'
+      });
+    } catch (alertErr) {
+      console.warn('[Incident Alert Auto-creation error]:', alertErr.message);
+    }
+
     res.status(201).json({
       success: true,
-      message: 'Incident logged successfully',
+      message: 'Incident logged successfully and synced with Live Alerts',
       incident: savedIncident,
+      alert: createdAlert,
       data: savedIncident
     });
   } catch (err) {
@@ -143,29 +169,95 @@ router.post(
 );
 
 /**
- * GET /api/incidents/all
- * Retrieve all logged incidents
+ * GET /api/incidents & GET /api/incidents/all
+ * Retrieve logged incidents with optional status filter (?status=ACTIVE)
  */
-router.get(
-  '/all',
-  authenticate,
-  requireRole(['POLICE', 'INCIDENT_MANAGEMENT']),
-  async (req, res, next) => {
-    try {
-      const incidents = await Incident.find()
-        .populate('reportedBy', 'name email role')
-        .sort({ createdAt: -1 });
-
-      res.json({
-        success: true,
-        count: incidents.length,
-        data: incidents
-      });
-    } catch (err) {
-      next(err);
+const getIncidentsHandler = async (req, res, next) => {
+  try {
+    let filter = {};
+    if (req.query.status) {
+      const qStatus = req.query.status.toUpperCase();
+      if (qStatus === 'ACTIVE') {
+        filter.status = { $ne: 'RESOLVED' };
+      } else {
+        filter.status = qStatus;
+      }
     }
+
+    const incidents = await Incident.find(filter)
+      .populate('reportedBy', 'name email role phone')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: incidents.length,
+      data: incidents,
+      incidents
+    });
+  } catch (err) {
+    next(err);
   }
-);
+};
+
+router.get('/', getIncidentsHandler);
+router.get('/all', getIncidentsHandler);
+
+/**
+ * PATCH /api/incidents/:id & PATCH /api/incidents/:id/status
+ * Resolve and update incident status, and sync linked alerts
+ */
+const resolveIncidentHandler = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const newStatus = (status || 'RESOLVED').toUpperCase();
+
+    const incident = await Incident.findById(id);
+    if (!incident) {
+      return res.status(404).json({
+        success: false,
+        error: 'NotFound',
+        message: 'Incident not found'
+      });
+    }
+
+    incident.status = newStatus;
+    if (newStatus === 'RESOLVED') {
+      incident.resolvedAt = new Date();
+      if (req.user && req.user.id) {
+        incident.resolvedBy = req.user.id;
+      }
+    }
+    await incident.save();
+
+    // Sync any corresponding Alert records
+    try {
+      await Alert.updateMany(
+        {
+          $or: [
+            { incidentId: incident._id },
+            { locationName: incident.locationName, type: 'ACCIDENT_REPORTED' }
+          ]
+        },
+        { $set: { status: newStatus } }
+      );
+    } catch (alertSyncErr) {
+      console.warn('[Incident Alert Sync Error]:', alertSyncErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Incident marked as ${newStatus}`,
+      data: incident,
+      incident
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+router.patch('/:id/status', resolveIncidentHandler);
+router.patch('/:id', resolveIncidentHandler);
 
 /**
  * GET /api/incidents/:id/suspects

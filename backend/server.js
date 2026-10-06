@@ -22,6 +22,7 @@ const authRoutes = require('./routes/authRoutes');
 const policeRoutes = require('./routes/policeRoutes');
 const incidentRoutes = require('./routes/incidentRoutes');
 const sightingRoutes = require('./routes/sightingRoutes');
+const securityZoneRoutes = require('./routes/securityZoneRoutes');
 const path = require('path');
 const os = require('os');
 const QRCode = require('qrcode');
@@ -113,10 +114,20 @@ app.use('/api/auth', authRoutes);
 app.use('/api/police', policeRoutes);
 app.use('/api/incidents', incidentRoutes);
 app.use('/api/sightings', sightingRoutes);
+app.use('/api/security-zones', securityZoneRoutes);
 
-// Serve Public and Uploads
+// Serve Public and Uploads with CORS
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(
+  '/uploads',
+  cors(),
+  express.static(path.join(__dirname, 'uploads'), {
+    setHeaders: (res) => {
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+  })
+);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

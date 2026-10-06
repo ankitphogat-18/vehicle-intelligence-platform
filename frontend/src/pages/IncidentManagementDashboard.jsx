@@ -53,6 +53,14 @@ function IncidentManagementDashboard({ initialTab = 'feed' }) {
   const livePhotoInputRef = useRef(null);
   const devicePhotoInputRef = useRef(null);
 
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem('user') || '{}');
+  } catch (e) {
+    user = {};
+  }
+  const isIncidentTeam = user?.role === 'INCIDENT_MANAGEMENT';
+
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
     return {
@@ -518,27 +526,48 @@ function IncidentManagementDashboard({ initialTab = 'feed' }) {
                     </div>
 
                     <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
-                      <button
-                        onClick={() => handleScanSuspects(inc)}
-                        style={{
-                          width: '100%',
-                          padding: '0.65rem',
-                          backgroundColor: isSelected ? 'var(--accent-cyan)' : 'var(--accent-blue)',
-                          color: '#0b1120',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontWeight: '700',
-                          fontSize: '0.875rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.4rem',
-                          transition: 'all 0.15s'
-                        }}
-                      >
-                        <span>🔍 Scan Suspect Vehicles</span>
-                      </button>
+                      {isIncidentTeam ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.55rem 0.85rem',
+                            backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                            borderRadius: '6px',
+                            border: '1px solid rgba(56, 189, 248, 0.2)'
+                          }}
+                        >
+                          <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <span>🛡️</span> Field Unit Logged
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '600' }}>
+                            🚨 Dispatched to Police HQ
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleScanSuspects(inc)}
+                          style={{
+                            width: '100%',
+                            padding: '0.65rem',
+                            backgroundColor: isSelected ? 'var(--accent-cyan)' : 'var(--accent-blue)',
+                            color: '#0b1120',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontWeight: '700',
+                            fontSize: '0.875rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.4rem',
+                            transition: 'all 0.15s'
+                          }}
+                        >
+                          <span>🔍 Scan Suspect Vehicles</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -546,8 +575,8 @@ function IncidentManagementDashboard({ initialTab = 'feed' }) {
             </div>
           )}
 
-          {/* SUSPECT VEHICLES SCANNER MODAL / RESULTS SECTION */}
-          {selectedIncident && (
+          {/* SUSPECT VEHICLES SCANNER MODAL / RESULTS SECTION (Police / Admin Only) */}
+          {!isIncidentTeam && selectedIncident && (
             <div
               className="card"
               style={{

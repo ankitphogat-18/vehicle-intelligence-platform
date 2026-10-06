@@ -682,31 +682,37 @@ function CitizenDashboard({ initialTab = 'list' }) {
                     </div>
 
                     {/* Document Proof Section */}
-                    {(v.rcDocumentUrl || v.rcDocPath) && (
-                      <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>Official RC Proof:</span>
-                        <a
-                          href={v.rcDocumentUrl || v.rcDocPath}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            color: 'var(--accent-blue)',
-                            textDecoration: 'none',
-                            fontWeight: '600',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.3rem',
-                            backgroundColor: 'rgba(56, 189, 248, 0.08)',
-                            padding: '0.2rem 0.5rem',
-                            borderRadius: '4px',
-                            border: '1px solid rgba(56, 189, 248, 0.2)'
-                          }}
-                        >
-                          <span>📄 View Uploaded RC Document</span>
-                          <span>↗</span>
-                        </a>
-                      </div>
-                    )}
+                    {(v.rcDocumentUrl || v.rcDocPath) && (() => {
+                      const rawPath = v.rcDocumentUrl || v.rcDocPath;
+                      const fullDoc = rawPath.startsWith('http')
+                        ? rawPath
+                        : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}${rawPath.startsWith('/') ? '' : '/'}${rawPath}`;
+                      return (
+                        <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>Official RC Proof:</span>
+                          <a
+                            href={fullDoc}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              color: 'var(--accent-blue)',
+                              textDecoration: 'none',
+                              fontWeight: '600',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(56, 189, 248, 0.2)'
+                            }}
+                          >
+                            <span>📄 View Uploaded RC Document</span>
+                            <span>↗</span>
+                          </a>
+                        </div>
+                      );
+                    })()}
 
                     {/* LATEST POLICE OFFICER NOTES & CASE FORUM */}
                     <div

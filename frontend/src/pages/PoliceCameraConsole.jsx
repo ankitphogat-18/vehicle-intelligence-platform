@@ -131,11 +131,22 @@ function PoliceCameraConsole() {
   // START CAMERA FEED
   const startCameraStream = async () => {
     setStreamError(null);
+    let stream;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      });
+      try {
+        // Try rear camera first (for mobile phones / field units)
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+      } catch (camErr) {
+        console.warn("Environment camera failed, falling back to default/front webcam:", camErr);
+        // Fallback for laptops/desktops without rear cameras
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+      }
 
       streamRef.current = stream;
       if (videoRef.current) {

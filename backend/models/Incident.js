@@ -43,6 +43,18 @@ const incidentSchema = new mongoose.Schema(
     photoUrl: {
       type: String,
     },
+    status: {
+      type: String,
+      enum: ['ACTIVE', 'REPORTED', 'RESOLVED'],
+      default: 'ACTIVE',
+    },
+    resolvedAt: {
+      type: Date,
+    },
+    resolvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
   },
   { timestamps: true }
 );

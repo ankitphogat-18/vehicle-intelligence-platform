@@ -122,9 +122,12 @@ router.get(
       // Enrich with vehicle details (RC doc, case timeline, police notes)
       const enrichedAlerts = await Promise.all(
         activeAlerts.map(async (alert) => {
-          const vehicle = await Vehicle.findOne({ plateNumber: alert.plateNumber })
-            .populate('ownerId', 'name email phone')
-            .lean();
+          let vehicle = null;
+          if (alert.plateNumber) {
+            vehicle = await Vehicle.findOne({ plateNumber: alert.plateNumber })
+              .populate('ownerId', 'name email phone')
+              .lean();
+          }
           return {
             ...alert,
             vehicle: vehicle || null
@@ -240,7 +243,7 @@ router.get(
 
 /**
  * PATCH /api/alerts/:id/resolve
- * Resolve a stolen vehicle alert (Police or Citizen owner)
+ * Resolve a stolen vehicle alert or incident alert (Police or Citizen owner)
  */
 router.patch(
   '/:id/resolve',
@@ -262,26 +265,28 @@ router.patch(
       alert.status = 'RESOLVED';
       await alert.save();
 
-      // Reset isStolen and update status on vehicle
-      const vObj = await Vehicle.findOne({ plateNumber: alert.plateNumber });
-      if (vObj) {
-        vObj.isStolen = false;
-        vObj.policeCaseStatus = 'VEHICLE_FOUND';
-        vObj.policeNotes = 'Vehicle recovered and alert resolved by authorities.';
-        if (!vObj.statusTimeline) vObj.statusTimeline = [];
-        vObj.statusTimeline.push({
-          status: 'VEHICLE_FOUND',
-          message: 'Vehicle marked as recovered and alert closed.',
-          updatedAt: new Date()
-        });
-        await vObj.save();
-      }
+      // Reset isStolen and update status on vehicle if alert had a plateNumber
+      if (alert.plateNumber) {
+        const vObj = await Vehicle.findOne({ plateNumber: alert.plateNumber });
+        if (vObj) {
+          vObj.isStolen = false;
+          vObj.policeCaseStatus = 'VEHICLE_FOUND';
+          vObj.policeNotes = 'Vehicle recovered and alert resolved by authorities.';
+          if (!vObj.statusTimeline) vObj.statusTimeline = [];
+          vObj.statusTimeline.push({
+            status: 'VEHICLE_FOUND',
+            message: 'Vehicle marked as recovered and alert closed.',
+            updatedAt: new Date()
+          });
+          await vObj.save();
+        }
 
-      // Dismiss corresponding anomaly
-      await Anomaly.updateMany(
-        { description: new RegExp(alert.plateNumber, 'i') },
-        { status: 'Dismissed' }
-      );
+        // Dismiss corresponding anomaly
+        await Anomaly.updateMany(
+          { description: new RegExp(alert.plateNumber, 'i') },
+          { status: 'Dismissed' }
+        );
+      }
 
       res.json({
         success: true,
@@ -294,11 +299,24 @@ router.patch(
   }
 );
 
-// GET all potential alerts (compatibility with legacy Overview & Anomaly endpoints)
+// GET all alerts (supports ?status=ACTIVE filter)
 router.get('/', async (req, res, next) => {
   try {
-    const alerts = await Anomaly.find({ status: 'Potential' }).lean();
-    res.json({ success: true, data: alerts });
+    let alertFilter = {};
+    if (req.query.status) {
+      alertFilter.status = req.query.status.toUpperCase();
+    }
+    const [alerts, anomalies] = await Promise.all([
+      Alert.find(alertFilter).populate('reportedBy', 'name email phone').sort({ createdAt: -1 }).lean(),
+      Anomaly.find({ status: 'Potential' }).lean()
+    ]);
+    res.json({
+      success: true,
+      count: alerts.length,
+      data: alerts.length > 0 ? alerts : anomalies,
+      alerts,
+      anomalies
+    });
   } catch (err) {
     next(err);
   }

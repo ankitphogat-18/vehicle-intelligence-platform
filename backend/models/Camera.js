@@ -46,6 +46,11 @@ const cameraSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    currentSecurityLevel: {
+      type: String,
+      enum: ['NORMAL', 'LEVEL_1_BUFFER', 'LEVEL_2_EXCLUSION'],
+      default: 'NORMAL',
+    },
     direction: {
       type: String,
       default: 'BIDIRECTIONAL',
