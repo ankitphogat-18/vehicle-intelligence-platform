@@ -67,15 +67,13 @@ function App() {
     navigate('/login');
   };
 
-  // 1. Unauthenticated View (Full-screen clean login/register, no sidebar)
+  // 1. Unauthenticated View (Login & Registration Portal)
   if (!user) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <Routes>
-          <Route path="/login" element={<Login onAuthSuccess={handleAuthSuccess} />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/login" element={<Login onAuthSuccess={handleAuthSuccess} />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
     );
   }
 
