@@ -51,6 +51,16 @@ function getLocalIpAddress() {
   return 'localhost';
 }
 
+// Root status endpoint
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    service: 'Vehicle Intelligence Platform Backend (GPU Accelerated)',
+    health: '/api/health',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({
