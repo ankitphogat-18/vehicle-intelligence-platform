@@ -9,22 +9,22 @@ function Navbar({ user, onLogout, backendHealth }) {
     switch (role) {
       case 'POLICE':
         return {
-          backgroundColor: 'rgba(59, 130, 246, 0.15)',
-          color: '#60a5fa',
-          border: '1px solid rgba(59, 130, 246, 0.35)'
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          color: '#3b82f6',
+          border: '1px solid rgba(59, 130, 246, 0.25)'
         };
       case 'INCIDENT_MANAGEMENT':
         return {
-          backgroundColor: 'rgba(245, 158, 11, 0.15)',
-          color: '#fbbf24',
-          border: '1px solid rgba(245, 158, 11, 0.35)'
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          color: '#d97706',
+          border: '1px solid rgba(245, 158, 11, 0.25)'
         };
       case 'CITIZEN':
       default:
         return {
-          backgroundColor: 'rgba(16, 185, 129, 0.15)',
-          color: '#34d399',
-          border: '1px solid rgba(16, 185, 129, 0.35)'
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          color: '#059669',
+          border: '1px solid rgba(16, 185, 129, 0.25)'
         };
     }
   };
@@ -40,71 +40,109 @@ function Navbar({ user, onLogout, backendHealth }) {
   };
 
   return (
-    <header className="header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.85rem 1.5rem', backgroundColor: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+    <header className="header">
+      {/* Left — brand + status */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <Link to="/" style={{ textDecoration: 'none', color: 'var(--text-primary)', fontWeight: '700', fontSize: '1.05rem', letterSpacing: '-0.02em' }}>
-          City-Wide Vehicle Intelligence
-        </Link>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <div className="header-brand-dot" />
+          <span style={{ fontSize: '0.88rem', fontWeight: '800', color: '#111827', letterSpacing: '-0.02em', textTransform: 'uppercase' }}>
+            Vehicle Intelligence Console
+          </span>
+          <span style={{
+            fontSize: '0.65rem',
+            color: '#6b7280',
+            padding: '0.12rem 0.45rem',
+            backgroundColor: '#f3f4f6',
+            borderRadius: '999px',
+            border: '1px solid #e5e7eb',
+            fontFamily: 'var(--font-mono)',
+            fontWeight: '600',
+            letterSpacing: '0.02em'
+          }}>
+            v2.4
+          </span>
+        </div>
+
         {backendHealth && (
-          <div className="status-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          <div className="status-pill">
             <span className={`status-dot ${isHealthy ? 'online' : 'offline'}`}></span>
-            <span>API {isHealthy ? 'Active' : 'Offline'}</span>
+            <span>API Telemetry {isHealthy ? 'Operational' : 'Unavailable'}</span>
           </div>
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+      {/* Right — user info + logout */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
         {user ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-primary)' }}>
-              {user.name}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#111827', lineHeight: '1.2' }}>
+                {user.name}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: '#6b7280' }}>
+                {user.email}
+              </div>
+            </div>
+
             <span
               style={{
-                fontSize: '0.75rem',
+                fontSize: '0.62rem',
                 fontWeight: '700',
-                padding: '0.2rem 0.6rem',
-                borderRadius: '9999px',
-                letterSpacing: '0.04em',
+                padding: '0.22rem 0.6rem',
+                borderRadius: '999px',
+                letterSpacing: '0.05em',
                 textTransform: 'uppercase',
                 ...getRoleBadgeStyle(user.role)
               }}
             >
               {user.role}
             </span>
+
             <button
               onClick={handleLogoutClick}
               style={{
-                padding: '0.35rem 0.75rem',
-                fontSize: '0.8rem',
-                fontWeight: '600',
-                backgroundColor: 'rgba(239, 68, 68, 0.12)',
-                color: '#f87171',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: '6px',
+                background: '#000000',
+                color: '#ffffff',
+                border: '2px solid #000000',
+                padding: '0.38rem 1rem',
+                borderRadius: '999px',
+                fontSize: '0.72rem',
+                fontWeight: '700',
                 cursor: 'pointer',
-                transition: 'background-color 0.15s'
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                transition: 'background-color 0.15s ease, color 0.15s ease',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.25)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.12)'; }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = '#ef4444';
+                e.currentTarget.style.borderColor = '#ef4444';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = '#000000';
+                e.currentTarget.style.borderColor = '#000000';
+              }}
+              title="Terminate current session"
             >
-              Logout
+              Exit
             </button>
           </div>
         ) : (
           <Link
             to="/login"
             style={{
-              padding: '0.4rem 0.9rem',
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              backgroundColor: 'var(--accent-blue)',
-              color: '#0b1120',
-              borderRadius: '6px',
-              textDecoration: 'none'
+              background: '#000000',
+              color: '#ffffff',
+              border: '2px solid #000000',
+              padding: '0.4rem 1rem',
+              borderRadius: '999px',
+              fontSize: '0.78rem',
+              fontWeight: '700',
+              textDecoration: 'none',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em'
             }}
           >
-            Sign In
+            Authenticate
           </Link>
         )}
       </div>
