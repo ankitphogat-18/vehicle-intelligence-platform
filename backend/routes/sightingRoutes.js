@@ -316,6 +316,145 @@ router.get(
   }
 );
 
+
+/**
+ * Helper to safely delete crop image file if present
+ */
+const safelyDeleteCropImage = (cropPath) => {
+  if (!cropPath || typeof cropPath !== 'string') return;
+  try {
+    const cleanPath = cropPath.replace(/^[/\\]+/, '');
+    const fullPath = path.join(__dirname, '..', cleanPath);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
+    }
+  } catch (err) {
+    console.warn('[Cleanup Error]: Could not delete crop image', cropPath, err.message);
+  }
+};
+
+/**
+ * DELETE /api/sightings/clear-feed
+ * Clears all sighting records
+ */
+router.delete(
+  '/clear-feed',
+  authenticate,
+  requireRole(['POLICE', 'INCIDENT_MANAGEMENT']),
+  async (req, res, next) => {
+    try {
+      const allSightings = await Sighting.find({}, 'cropImagePath').lean();
+      allSightings.forEach((s) => safelyDeleteCropImage(s.cropImagePath));
+
+      const resS = await Sighting.deleteMany({});
+      const resVs = await VehicleSighting.deleteMany({});
+
+      res.json({
+        success: true,
+        message: 'All checkpoint detection records cleared successfully',
+        deletedCount: resS.deletedCount + resVs.deletedCount
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * POST /api/sightings/bulk-delete
+ * Bulk delete sightings by an array of IDs
+ */
+router.post(
+  '/bulk-delete',
+  authenticate,
+  requireRole(['POLICE', 'INCIDENT_MANAGEMENT']),
+  async (req, res, next) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'ValidationError',
+          message: 'Array of sighting IDs is required'
+        });
+      }
+
+      const sightings = await Sighting.find({ _id: { $in: ids } }).lean();
+      sightings.forEach((s) => safelyDeleteCropImage(s.cropImagePath));
+
+      const resS = await Sighting.deleteMany({ _id: { $in: ids } });
+      const resVs = await VehicleSighting.deleteMany({ _id: { $in: ids } });
+
+      for (const s of sightings) {
+        await VehicleSighting.deleteMany({
+          plateNumber: s.plateNumber,
+          cameraId: s.cameraId,
+          timestamp: s.timestamp
+        });
+      }
+
+      res.json({
+        success: true,
+        message: `Successfully deleted ${resS.deletedCount + resVs.deletedCount} sighting(s)`,
+        deletedCount: resS.deletedCount + resVs.deletedCount
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * DELETE /api/sightings/:id
+ * Delete a specific sighting record by ID
+ */
+router.delete(
+  '/:id',
+  authenticate,
+  requireRole(['POLICE', 'INCIDENT_MANAGEMENT']),
+  async (req, res, next) => {
+    try {
+      const { id } = req.params;
+
+      const sighting = await Sighting.findById(id);
+      if (sighting) {
+        safelyDeleteCropImage(sighting.cropImagePath);
+        await Sighting.findByIdAndDelete(id);
+        await VehicleSighting.deleteMany({
+          plateNumber: sighting.plateNumber,
+          cameraId: sighting.cameraId,
+          timestamp: sighting.timestamp
+        });
+
+        return res.json({
+          success: true,
+          message: `Sighting ${sighting.plateNumber} deleted successfully`,
+          deletedId: id
+        });
+      }
+
+      const vs = await VehicleSighting.findById(id);
+      if (vs) {
+        safelyDeleteCropImage(vs.cropImagePath);
+        await VehicleSighting.findByIdAndDelete(id);
+        return res.json({
+          success: true,
+          message: `Sighting ${vs.plateNumber} deleted successfully`,
+          deletedId: id
+        });
+      }
+
+      return res.status(404).json({
+        success: false,
+        error: 'NotFound',
+        message: 'Sighting record not found'
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 /**
  * GET /api/sightings/trajectory/:plateNumber
  * Returns chronological sightings trajectory enriched with camera GPS coordinates & vehicle details
