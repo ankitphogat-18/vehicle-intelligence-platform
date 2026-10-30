@@ -100,6 +100,7 @@ function App() {
               <>
                 <Route path="/" element={<DashboardPage backendHealth={backendHealth} error={error} onRefreshHealth={fetchHealth} />} />
                 <Route path="/cameras" element={<PoliceCameraConsole />} />
+                <Route path="/camera" element={<PoliceCameraConsole />} />
                 <Route path="/police/cameras" element={<PoliceCameraConsole />} />
                 <Route path="/police/verifications" element={<PoliceVerificationQueue />} />
                 <Route path="/anpr" element={<ANPRStudioPage />} />

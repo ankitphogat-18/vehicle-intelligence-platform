@@ -102,12 +102,14 @@ async function recognizePlate(imageBuffer) {
     croppedBase64 = null;
   }
 
+  const isValid = Boolean(normalized.isValidFormat && normalized.normalizedPlate);
+
   return {
-    success: true,
-    plateNumber: normalized.normalizedPlate || rawText.replace(/[^A-Za-z0-9]/g, ''),
+    success: isValid,
+    plateNumber: isValid ? normalized.normalizedPlate : null,
     rawText: rawText,
-    confidence: Number(confidence.toFixed(2)),
-    isValidFormat: normalized.isValidFormat,
+    confidence: isValid ? Number(confidence.toFixed(2)) : 0,
+    isValidFormat: isValid,
     stateCode: normalized.stateCode,
     rtoCode: normalized.rtoCode,
     series: normalized.series,

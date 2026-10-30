@@ -21,6 +21,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 *.log
+*.err
+uploads/
 
 # OS / Editor files
 .DS_Store

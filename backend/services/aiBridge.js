@@ -2,7 +2,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
 
-const AI_SERVICE_URL = 'http://127.0.0.1:8000';
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://127.0.0.1:8001';
 
 async function detectPlatesFromVideo(videoPath) {
   try {

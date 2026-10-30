@@ -108,17 +108,17 @@ router.post(
         try { fs.unlinkSync(tempFilePath); } catch (e) {}
       }
 
-      const plateNumber = aiResult.plateNumber
+      const detectedPlate = aiResult && aiResult.success && aiResult.plateNumber
         ? aiResult.plateNumber.toUpperCase().trim()
-        : req.body.simulatedPlate
-        ? req.body.simulatedPlate.toUpperCase().trim()
         : null;
+
+      const plateNumber = detectedPlate || (req.body.simulatedPlate ? req.body.simulatedPlate.toUpperCase().trim() : null);
 
       if (!plateNumber) {
         return res.json({
-          success: true,
+          success: false,
           plateNumber: null,
-          message: 'No plate detected'
+          message: 'No vehicle license plate detected in this image. Please upload a clear photo focusing on the vehicle license plate.'
         });
       }
 
@@ -242,8 +242,8 @@ router.post(
             plateNumber: plate,
             timestamp: sTime,
             plateConfidence: item.confidence || 0.93,
-            vehicleType: 'SEDAN',
-            vehicleColor: 'Silver',
+            vehicleType: item.visual_model || 'SEDAN',
+            vehicleColor: item.visual_color || 'Silver',
             locationName,
             sourceType: 'SURVEILLANCE_AI_VIDEO'
           });
