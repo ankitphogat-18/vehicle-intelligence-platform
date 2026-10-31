@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ShieldAlert,
-  Camera,
+  Shield,
   Car,
   CheckCircle2,
   AlertTriangle,
@@ -12,10 +11,9 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  Activity,
-  Layers,
-  Cpu,
-  Radio
+  Radio,
+  SlidersHorizontal,
+  ChevronRight
 } from 'lucide-react';
 
 function Login({ onAuthSuccess }) {
@@ -40,10 +38,7 @@ function Login({ onAuthSuccess }) {
       email: 'police@chd.gov.in',
       password: 'password123',
       name: 'Chief Officer',
-      desc: 'Real-time ANPR CCTV ingestion, hotlist hits, vehicle trajectories',
-      accentColor: '#ef4444',
-      badgeBg: 'rgba(239, 68, 68, 0.15)',
-      badgeText: '#f87171'
+      desc: 'Real-time ANPR CCTV ingestion, hotlist hits, vehicle trajectories'
     },
     {
       role: 'INCIDENT_MANAGEMENT',
@@ -52,10 +47,7 @@ function Login({ onAuthSuccess }) {
       email: 'incident@expressway.gov.in',
       password: 'password123',
       name: 'Control Room Commander',
-      desc: 'Expressway traffic flow, congestion heatmaps, active accident response',
-      accentColor: '#f59e0b',
-      badgeBg: 'rgba(245, 158, 11, 0.15)',
-      badgeText: '#fbbf24'
+      desc: 'Expressway traffic flow, congestion heatmaps, active accident response'
     },
     {
       role: 'CITIZEN',
@@ -64,10 +56,7 @@ function Login({ onAuthSuccess }) {
       email: 'citizen@vehicleportal.in',
       password: 'password123',
       name: 'Rajesh Sharma',
-      desc: 'Vehicle registration, digital RC verification, stolen vehicle reporting',
-      accentColor: '#10b981',
-      badgeBg: 'rgba(16, 185, 129, 0.15)',
-      badgeText: '#34d399'
+      desc: 'Vehicle registration, digital RC verification, stolen vehicle reporting'
     }
   ];
 
@@ -154,79 +143,85 @@ function Login({ onAuthSuccess }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-red-500 selection:text-white flex flex-col justify-between relative overflow-hidden">
-      {/* Topographic Background Overlay */}
-      <div className="absolute inset-0 opacity-15 pointer-events-none">
+    <div className="min-h-screen bg-black text-white font-sans selection:bg-white selection:text-black flex flex-col justify-between relative overflow-hidden">
+      {/* Nayan-inspired subtle monochrome wave lines */}
+      <div className="absolute inset-0 opacity-20 pointer-events-none">
         <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
           <defs>
-            <pattern id="topo-login" width="120" height="120" patternUnits="userSpaceOnUse">
-              <path d="M 0 30 Q 30 10, 60 30 T 120 30 M 0 60 Q 30 80, 60 60 T 120 60 M 0 90 Q 30 70, 60 90 T 120 90" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1" />
+            <pattern id="topo-monochrome" width="140" height="140" patternUnits="userSpaceOnUse">
+              <path
+                d="M 0 35 Q 35 10, 70 35 T 140 35 M 0 70 Q 35 95, 70 70 T 140 70 M 0 105 Q 35 80, 70 105 T 140 105"
+                fill="none"
+                stroke="rgba(255,255,255,0.3)"
+                strokeWidth="1"
+              />
             </pattern>
           </defs>
-          <rect width="100%" height="100%" fill="url(#topo-login)" />
+          <rect width="100%" height="100%" fill="url(#topo-monochrome)" />
         </svg>
       </div>
 
-      {/* Subtle Red Radial Glow in center */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-red-600/10 blur-[130px] rounded-full pointer-events-none"></div>
+      {/* Subtle Monochrome Ambient Vignette */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-white/[0.03] blur-[150px] rounded-full pointer-events-none"></div>
 
-      {/* Top Header Bar */}
-      <header className="relative z-10 border-b border-slate-800/80 bg-slate-950/60 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      {/* Floating Header Bar inspired by NAYAN aesthetic */}
+      <header className="relative z-10 px-4 sm:px-8 pt-6">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center shadow-lg">
-              <span className="w-3.5 h-3.5 rounded-full bg-red-500 animate-pulse"></span>
+            <div className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center font-black text-sm tracking-tighter">
+              VI
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-black tracking-tight text-white">VEHICLE INTELLIGENCE</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-950 border border-red-800 text-red-400">
-                  PLATFORM
+                <span className="text-lg font-black tracking-tight text-white uppercase">
+                  Vehicle Intelligence
+                </span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white text-black">
+                  ANPR
                 </span>
               </div>
-              <p className="text-[11px] font-medium text-slate-400 tracking-wider uppercase">City-Wide ANPR & Investigation System</p>
+              <p className="text-[10px] font-mono text-neutral-400 tracking-widest uppercase">
+                City-Wide Interdiction Network
+              </p>
             </div>
           </div>
 
           <div className="hidden sm:flex items-center gap-3 text-xs font-mono">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-              <span>ANPR SURVEILLANCE NODE // ACTIVE</span>
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-300">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+              <span>SURVEILLANCE NODE // ONLINE</span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Container - Styled like the #live-demo dark card */}
-      <main className="relative z-10 flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 flex items-center">
-        <div className="w-full rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl p-6 sm:p-10 lg:p-12 relative overflow-hidden">
-          {/* Accent Glow Inside Container */}
-          <div className="absolute top-0 right-0 w-80 h-80 bg-red-500/10 blur-[90px] rounded-full pointer-events-none"></div>
-
+      {/* Main Hero Card Container */}
+      <main className="relative z-10 flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 flex items-center">
+        <div className="w-full rounded-3xl bg-[#090909] border border-neutral-800 shadow-2xl p-6 sm:p-10 lg:p-12 relative overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            {/* Left Column: System Identity & Role Switchers & Live Simulation */}
+            {/* Left Column: System Identity & Quick Role Switchers */}
             <div className="lg:col-span-7 space-y-6">
               {/* Eyebrow Pill */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-950/60 border border-red-800/80 text-xs font-mono font-bold text-red-400 uppercase tracking-wider">
-                <Radio className="w-3.5 h-3.5 text-red-400 animate-pulse" />
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-mono font-bold text-white uppercase tracking-wider">
+                <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
                 AUTOMATIC NUMBER PLATE RECOGNITION (ANPR)
               </div>
 
               {/* Title & Description */}
               <div className="space-y-3">
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.1]">
+                <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-[1.05] uppercase">
                   City-Wide Vehicle<br />Intelligence & Investigation
                 </h1>
-                <p className="text-slate-300 text-sm sm:text-base leading-relaxed max-w-xl">
+                <p className="text-neutral-400 text-sm sm:text-base leading-relaxed max-w-xl">
                   Automated vehicle detection, multi-camera corridor tracking, and real-time stolen plate interdiction across master municipal checkpoints.
                 </p>
               </div>
 
               {/* Quick Role Switcher Pills */}
               <div className="space-y-2.5 pt-2">
-                <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                <div className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 flex items-center justify-between">
                   <span>1-Click Test Credential Fill:</span>
-                  <span className="text-[11px] text-slate-500">Auto-fills credentials</span>
+                  <span className="text-[11px] text-neutral-500 font-mono">Auto-populates credentials</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -237,53 +232,60 @@ function Login({ onAuthSuccess }) {
                         key={acc.role}
                         type="button"
                         onClick={() => handleSelectDemo(acc)}
-                        className={`p-3 rounded-xl border text-left transition-all ${
+                        className={`p-3.5 rounded-2xl border text-left transition-all ${
                           isSelected
-                            ? 'bg-slate-800 border-red-500 shadow-md ring-1 ring-red-500'
-                            : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 hover:bg-slate-800/60'
+                            ? 'bg-white text-black border-white shadow-xl ring-2 ring-white/50'
+                            : 'bg-black border-neutral-800 hover:border-neutral-600 hover:bg-neutral-900/60 text-white'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center justify-between mb-2">
                           <span
-                            className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full font-mono"
-                            style={{ backgroundColor: acc.badgeBg, color: acc.badgeText }}
+                            className={`text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                              isSelected
+                                ? 'bg-black text-white border-black'
+                                : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                            }`}
                           >
                             {acc.badge}
                           </span>
-                          {isSelected && <span className="w-2 h-2 rounded-full bg-red-500"></span>}
+                          {isSelected && <span className="w-2 h-2 rounded-full bg-black"></span>}
                         </div>
-                        <div className="text-xs font-bold text-white truncate">{acc.label}</div>
-                        <div className="text-[11px] text-slate-400 font-mono truncate">{acc.email}</div>
+                        <div className={`text-xs font-bold truncate ${isSelected ? 'text-black' : 'text-white'}`}>
+                          {acc.label}
+                        </div>
+                        <div className={`text-[11px] font-mono truncate ${isSelected ? 'text-neutral-700' : 'text-neutral-400'}`}>
+                          {acc.email}
+                        </div>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Live Detection HUD Mockup (matching the live-demo camera visual) */}
-              <div className="mt-4 rounded-xl bg-slate-950 border border-slate-800/90 p-4 font-mono text-xs">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-[11px]">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              {/* Monochrome Live Detection HUD Mockup */}
+              <div className="mt-4 rounded-2xl bg-black border border-neutral-800 p-4 font-mono text-xs">
+                <div className="flex items-center justify-between pb-3 border-b border-neutral-800 text-[11px]">
+                  <div className="flex items-center gap-2 text-neutral-300">
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
                     <span>CHECKPOINT_04 // SECTOR_17_EXPRESS</span>
                   </div>
-                  <span className="text-red-400 font-bold bg-red-950/80 px-2 py-0.5 rounded border border-red-800/80">
-                    🚨 HOTLIST MATCH: DL 01 AA 9999
+                  <span className="text-black font-bold bg-white px-2.5 py-0.5 rounded text-[10px] tracking-wider uppercase">
+                    HOTLIST MATCH: DL 01 AA 9999
                   </span>
                 </div>
-                <div className="pt-3 flex flex-wrap items-center justify-between text-slate-400 text-[11px] gap-2">
+                <div className="pt-3 flex flex-wrap items-center justify-between text-neutral-400 text-[11px] gap-2">
                   <span>LATENCY: &lt;85ms</span>
                   <span>CONFIDENCE: 99.6%</span>
-                  <span>STATUS: PATROL DISPATCHED</span>
+                  <span className="text-white font-bold">STATUS: PATROL DISPATCHED</span>
                 </div>
               </div>
             </div>
 
-            {/* Right Column: Tactical Glassmorphic Auth Card */}
+            {/* Right Column: High-End Monochrome Auth Card */}
             <div className="lg:col-span-5">
-              <div className="rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl p-6 sm:p-8 backdrop-blur-md">
+              <div className="rounded-2xl bg-black border border-neutral-800 shadow-2xl p-6 sm:p-8">
                 {/* Tabs: Sign In / Register */}
-                <div className="flex rounded-xl bg-slate-900 p-1 border border-slate-800 mb-6">
+                <div className="flex rounded-full bg-neutral-900 p-1 border border-neutral-800 mb-6">
                   <button
                     type="button"
                     onClick={() => {
@@ -291,8 +293,10 @@ function Login({ onAuthSuccess }) {
                       setError(null);
                       setSuccessMsg(null);
                     }}
-                    className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
-                      !isRegister ? 'bg-red-500 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                    className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-full transition-all ${
+                      !isRegister
+                        ? 'bg-white text-black shadow-md'
+                        : 'text-neutral-400 hover:text-white'
                     }`}
                   >
                     Authenticate
@@ -304,8 +308,10 @@ function Login({ onAuthSuccess }) {
                       setError(null);
                       setSuccessMsg(null);
                     }}
-                    className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
-                      isRegister ? 'bg-red-500 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                    className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-full transition-all ${
+                      isRegister
+                        ? 'bg-white text-black shadow-md'
+                        : 'text-neutral-400 hover:text-white'
                     }`}
                   >
                     Register Citizen
@@ -313,27 +319,27 @@ function Login({ onAuthSuccess }) {
                 </div>
 
                 <div className="mb-5">
-                  <h2 className="text-xl font-black text-white">
+                  <h2 className="text-xl font-black text-white uppercase tracking-tight">
                     {isRegister ? 'Citizen Registration' : 'System Access'}
                   </h2>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-neutral-400 mt-1">
                     {isRegister
-                      ? 'Register your civilian identity to verify vehicles and file theft reports.'
-                      : 'Provide authorized credentials or select a 1-click test role above.'}
+                      ? 'Register civilian credentials to verify vehicles and file theft reports.'
+                      : 'Provide credentials or select a 1-click test role above.'}
                   </p>
                 </div>
 
                 {/* Status Messages */}
                 {error && (
-                  <div className="mb-4 p-3 rounded-lg bg-red-950/60 border border-red-800 text-red-300 text-xs flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                  <div className="mb-4 p-3 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 text-xs flex items-center gap-2 font-mono">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-white" />
                     <span>{error}</span>
                   </div>
                 )}
 
                 {successMsg && (
-                  <div className="mb-4 p-3 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <div className="mb-4 p-3 rounded-xl bg-white text-black text-xs flex items-center gap-2 font-mono font-bold">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-black" />
                     <span>{successMsg}</span>
                   </div>
                 )}
@@ -342,11 +348,11 @@ function Login({ onAuthSuccess }) {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {isRegister && (
                     <div>
-                      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 mb-1">
                         Full Name
                       </label>
                       <div className="relative">
-                        <User className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                        <User className="absolute left-3 top-3 w-4 h-4 text-neutral-500" />
                         <input
                           type="text"
                           name="name"
@@ -354,18 +360,18 @@ function Login({ onAuthSuccess }) {
                           onChange={handleChange}
                           required
                           placeholder="e.g. Rajesh Sharma"
-                          className="w-full bg-slate-900 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                          className="w-full bg-neutral-900 border border-neutral-800 focus:border-white focus:ring-1 focus:ring-white rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-neutral-600 outline-none transition-all"
                         />
                       </div>
                     </div>
                   )}
 
                   <div>
-                    <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    <label className="block text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 mb-1">
                       Email Address / Badge ID
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                      <Mail className="absolute left-3 top-3 w-4 h-4 text-neutral-500" />
                       <input
                         type="email"
                         name="email"
@@ -373,17 +379,17 @@ function Login({ onAuthSuccess }) {
                         onChange={handleChange}
                         required
                         placeholder="officer@agency.gov.in or email"
-                        className="w-full bg-slate-900 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                        className="w-full bg-neutral-900 border border-neutral-800 focus:border-white focus:ring-1 focus:ring-white rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-neutral-600 outline-none transition-all"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-1">
+                    <label className="block text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 mb-1">
                       Password
                     </label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
+                      <Lock className="absolute left-3 top-3 w-4 h-4 text-neutral-500" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         name="password"
@@ -391,12 +397,12 @@ function Login({ onAuthSuccess }) {
                         onChange={handleChange}
                         required
                         placeholder="••••••••••••"
-                        className="w-full bg-slate-900 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                        className="w-full bg-neutral-900 border border-neutral-800 focus:border-white focus:ring-1 focus:ring-white rounded-xl pl-10 pr-10 py-2.5 text-sm text-white placeholder-neutral-600 outline-none transition-all"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                        className="absolute right-3 top-3 text-neutral-400 hover:text-white"
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -405,14 +411,14 @@ function Login({ onAuthSuccess }) {
 
                   {isRegister && (
                     <div>
-                      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      <label className="block text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 mb-1">
                         System Role
                       </label>
                       <select
                         name="role"
                         value={formData.role}
                         onChange={handleChange}
-                        className="w-full bg-slate-900 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-xl px-4 py-2.5 text-sm text-white outline-none"
+                        className="w-full bg-neutral-900 border border-neutral-800 focus:border-white focus:ring-1 focus:ring-white rounded-xl px-4 py-2.5 text-sm text-white outline-none"
                       >
                         <option value="CITIZEN">Citizen (Vehicle Owner)</option>
                         <option value="INCIDENT_MANAGEMENT">Incident Field Management</option>
@@ -425,31 +431,31 @@ function Login({ onAuthSuccess }) {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full py-3.5 px-6 rounded-full bg-red-500 hover:bg-red-600 text-white font-extrabold uppercase tracking-wider text-xs shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="w-full py-3.5 px-6 rounded-full bg-white hover:bg-neutral-200 text-black font-black uppercase tracking-wider text-xs shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {loading ? (
                         <span>PROCESSING...</span>
                       ) : isRegister ? (
                         <>
                           <span>CREATE CITIZEN PROFILE</span>
-                          <ArrowRight className="w-4 h-4" />
+                          <ArrowRight className="w-4 h-4 text-black" />
                         </>
                       ) : (
                         <>
                           <span>AUTHENTICATE & ENTER CONSOLE</span>
-                          <ArrowRight className="w-4 h-4" />
+                          <ArrowRight className="w-4 h-4 text-black" />
                         </>
                       )}
                     </button>
                   </div>
                 </form>
 
-                <div className="mt-5 pt-4 border-t border-slate-800/80 text-center text-xs text-slate-500">
+                <div className="mt-5 pt-4 border-t border-neutral-800 text-center text-xs text-neutral-400">
                   {isRegister ? (
                     <button
                       type="button"
                       onClick={() => setIsRegister(false)}
-                      className="hover:text-red-400 font-semibold"
+                      className="hover:text-white font-semibold underline underline-offset-4"
                     >
                       Already have access? Switch to Authenticate
                     </button>
@@ -457,7 +463,7 @@ function Login({ onAuthSuccess }) {
                     <button
                       type="button"
                       onClick={() => setIsRegister(true)}
-                      className="hover:text-red-400 font-semibold"
+                      className="hover:text-white font-semibold underline underline-offset-4"
                     >
                       New citizen? Register an account here
                     </button>
@@ -469,18 +475,18 @@ function Login({ onAuthSuccess }) {
         </div>
       </main>
 
-      {/* Modern Compact Footer */}
-      <footer className="relative z-10 border-t border-slate-800/80 bg-slate-950/80 py-4 text-center text-xs text-slate-500">
+      {/* Modern Compact Monochrome Footer */}
+      <footer className="relative z-10 border-t border-neutral-900 bg-black py-4 text-center text-xs text-neutral-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div>
             © 2026 Vehicle Intelligence Platform • Master Optical ANPR & Highway Interdiction
           </div>
-          <div className="flex items-center gap-4 text-[11px] font-mono text-slate-400">
+          <div className="flex items-center gap-4 text-[11px] font-mono text-neutral-400">
             <span>RTSP 4K INGESTION</span>
             <span>•</span>
             <span>SUB-85ms INFERENCE</span>
             <span>•</span>
-            <span className="text-emerald-400">ENCRYPTED TELEMETRY</span>
+            <span className="text-white font-bold">ENCRYPTED TELEMETRY</span>
           </div>
         </div>
       </footer>

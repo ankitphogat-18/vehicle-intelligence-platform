@@ -118,12 +118,12 @@ function Sidebar({ user }) {
   const getRoleHeaderBadge = (role) => {
     switch (role) {
       case 'POLICE':
-        return { label: 'POLICE INTEL', color: '#60a5fa', bg: 'rgba(59, 130, 246, 0.1)', border: 'rgba(59, 130, 246, 0.2)' };
+        return { label: 'POLICE INTEL', color: '#ffffff', bg: 'rgba(255, 255, 255, 0.08)', border: 'rgba(255, 255, 255, 0.2)' };
       case 'INCIDENT_MANAGEMENT':
-        return { label: 'INCIDENT CMD', color: '#fbbf24', bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.2)' };
+        return { label: 'INCIDENT CMD', color: '#ffffff', bg: 'rgba(255, 255, 255, 0.08)', border: 'rgba(255, 255, 255, 0.2)' };
       case 'CITIZEN':
       default:
-        return { label: 'CITIZEN PORTAL', color: '#34d399', bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.2)' };
+        return { label: 'CITIZEN PORTAL', color: '#ffffff', bg: 'rgba(255, 255, 255, 0.08)', border: 'rgba(255, 255, 255, 0.2)' };
     }
   };
 
@@ -176,8 +176,8 @@ function Sidebar({ user }) {
       <div className="sidebar-footer-node">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
           <span style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', fontWeight: '700', letterSpacing: '0.08em', textTransform: 'uppercase' }}>SYSTEM NODE</span>
-          <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10b981', boxShadow: '0 0 6px rgba(16,185,129,0.7)' }}></span>
+          <span style={{ fontSize: '0.65rem', color: '#ffffff', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#ffffff', boxShadow: '0 0 4px rgba(255,255,255,0.7)' }}></span>
             ONLINE
           </span>
         </div>

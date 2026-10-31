@@ -6,27 +6,11 @@ function Navbar({ user, onLogout, backendHealth }) {
   const isHealthy = backendHealth && backendHealth.status === 'ok';
 
   const getRoleBadgeStyle = (role) => {
-    switch (role) {
-      case 'POLICE':
-        return {
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          color: '#3b82f6',
-          border: '1px solid rgba(59, 130, 246, 0.25)'
-        };
-      case 'INCIDENT_MANAGEMENT':
-        return {
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          color: '#d97706',
-          border: '1px solid rgba(245, 158, 11, 0.25)'
-        };
-      case 'CITIZEN':
-      default:
-        return {
-          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-          color: '#059669',
-          border: '1px solid rgba(16, 185, 129, 0.25)'
-        };
-    }
+    return {
+      backgroundColor: '#f3f4f6',
+      color: '#000000',
+      border: '1px solid #d1d5db'
+    };
   };
 
   const handleLogoutClick = () => {
@@ -114,8 +98,8 @@ function Navbar({ user, onLogout, backendHealth }) {
                 transition: 'background-color 0.15s ease, color 0.15s ease',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.background = '#ef4444';
-                e.currentTarget.style.borderColor = '#ef4444';
+                e.currentTarget.style.background = '#333333';
+                e.currentTarget.style.borderColor = '#333333';
               }}
               onMouseLeave={e => {
                 e.currentTarget.style.background = '#000000';
