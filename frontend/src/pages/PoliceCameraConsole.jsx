@@ -504,7 +504,12 @@ const [uploadError, setUploadError] = useState(null);
         });
       }
     } catch (err) {
-      setUploadError(err.message);
+      const activeUrl = window.__CURRENT_BACKEND_URL__ || (typeof window !== 'undefined' ? window.location.origin : '');
+      let displayMsg = err.message;
+      if (err.message === 'Failed to fetch') {
+        displayMsg = `Network Error (Failed to fetch): Could not connect to backend server at [${activeUrl}]. Please ensure your backend/tunnel is active or update your backend URL.`;
+      }
+      setUploadError(displayMsg);
     } finally {
       setUploadLoading(false);
     }
@@ -1252,8 +1257,46 @@ const [uploadError, setUploadError] = useState(null);
             )}
 
             {uploadError && (
-              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}>
-                {uploadError}
+              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '0.85rem', borderRadius: '6px', fontSize: '0.85rem' }}>
+                <div style={{ fontWeight: '600', marginBottom: '0.4rem' }}>{uploadError}</div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newUrl = window.prompt('Enter your active backend or tunnel URL (e.g. https://xxxx.loca.lt):');
+                      if (newUrl && window.setActiveBackendUrl) window.setActiveBackendUrl(newUrl);
+                    }}
+                    style={{
+                      padding: '0.3rem 0.6rem',
+                      backgroundColor: '#ef4444',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: '700',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Change Backend URL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.setActiveBackendUrl) window.setActiveBackendUrl('reset');
+                    }}
+                    style={{
+                      padding: '0.3rem 0.6rem',
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                      color: '#f8fafc',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Reset to Cloud (Render)
+                  </button>
+                </div>
               </div>
             )}
 

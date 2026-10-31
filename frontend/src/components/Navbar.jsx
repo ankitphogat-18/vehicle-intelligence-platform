@@ -47,12 +47,25 @@ function Navbar({ user, onLogout, backendHealth }) {
           </span>
         </div>
 
-        {backendHealth && (
-          <div className="status-pill">
-            <span className={`status-dot ${isHealthy ? 'online' : 'offline'}`}></span>
-            <span>API Telemetry {isHealthy ? 'Operational' : 'Unavailable'}</span>
-          </div>
-        )}
+        <div
+          className="status-pill"
+          title={`Click to configure backend URL (Active: ${window.__CURRENT_BACKEND_URL__ || (typeof window !== 'undefined' ? window.location.origin : '')})`}
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            const current = window.__CURRENT_BACKEND_URL__ || (typeof window !== 'undefined' ? window.location.origin : '');
+            const choice = window.prompt(
+              `Current Backend: ${current}\n\nEnter your active tunnel URL (e.g. https://xxxx.loca.lt)\nOr type 'reset' to use Render cloud:\nOr type 'localhost' to use http://localhost:5000:`,
+              current
+            );
+            if (choice !== null && window.setActiveBackendUrl) {
+              window.setActiveBackendUrl(choice === 'localhost' ? 'http://localhost:5000' : choice);
+            }
+          }}
+        >
+          <span className={`status-dot ${isHealthy ? 'online' : 'offline'}`}></span>
+          <span>API: {isHealthy ? 'Operational' : 'Disconnected'}</span>
+          <span style={{ fontSize: '0.65rem', opacity: 0.75, marginLeft: '0.25rem' }}>⚙</span>
+        </div>
       </div>
 
       {/* Right — user info + logout */}
