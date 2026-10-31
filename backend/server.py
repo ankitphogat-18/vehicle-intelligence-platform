@@ -68,22 +68,40 @@ VALID_INDIAN_STATES = {
     'TN', 'TR', 'TS', 'UK', 'UP', 'WB'
 }
 
-D2L = {'0': 'O', '1': 'I', '2': 'Z', '3': 'J', '4': 'A', '5': 'S', '6': 'G', '8': 'B'}
-L2D = {'O': '0', 'Q': '0', 'D': '0', 'I': '1', 'L': '1', 'T': '1', 'J': '1', 'Z': '2', 'S': '5', 'G': '6', 'B': '8', 'A': '4'}
+# Conservative OCR stroke confusion (only high-probability visual confusions)
+D2L = {'0': 'O', '1': 'I', '8': 'B', '2': 'Z', '5': 'S'}
+L2D = {'O': '0', 'Q': '0', 'I': '1', 'L': '1', 'Z': '2', 'S': '5', 'B': '8'}
 
 STANDARD_PLATE_REGEX = re.compile(r'^([A-Z]{2})([0-9]{1,2})([A-Z]{0,3})([0-9]{3,4})$')
 BH_SERIES_REGEX = re.compile(r'^([0-9]{2})BH([0-9]{4})([A-Z]{1,2})$')
+
+def levenshtein_dist(s1, s2):
+    if len(s1) < len(s2):
+        return levenshtein_dist(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    prev = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        curr = [i + 1]
+        for j, c2 in enumerate(s2):
+            insert = prev[j + 1] + 1
+            delete = curr[j] + 1
+            sub = prev[j] + (c1 != c2)
+            curr.append(min(insert, delete, sub))
+        prev = curr
+    return prev[-1]
 
 def normalize_indian_plate(raw_text):
     if not raw_text:
         return None
     clean = re.sub(r'[^A-Z0-9]', '', raw_text.upper())
     for tag in ['INDIA', 'IND', 'AND', 'ND', 'MD']:
-        if clean.startswith(tag) and len(clean) >= 8:
+        if clean.startswith(tag) and len(clean) >= 9:
             clean = clean[len(tag):]
             break
 
-    if len(clean) < 7 or len(clean) > 13:
+    # Standard Indian vehicle registrations are 8 to 11 characters
+    if len(clean) < 8 or len(clean) > 11:
         return None
 
     if BH_SERIES_REGEX.match(clean):
@@ -97,25 +115,32 @@ def normalize_indian_plate(raw_text):
         num = match.group(4)
         return f"{state}{rto}{series}{num}"
 
+    # Check State Code at positions 0,1
     s0 = D2L.get(clean[0], clean[0])
     s1 = D2L.get(clean[1], clean[1])
     cand_state = f"{s0}{s1}"
 
     if cand_state not in VALID_INDIAN_STATES:
+        found = False
         for offset in [1, 2]:
-            if len(clean) - offset >= 7:
+            if len(clean) - offset >= 8:
                 os0 = D2L.get(clean[offset], clean[offset])
                 os1 = D2L.get(clean[offset + 1], clean[offset + 1])
                 if f"{os0}{os1}" in VALID_INDIAN_STATES:
                     cand_state = f"{os0}{os1}"
                     clean = clean[offset:]
+                    found = True
                     break
-        if cand_state not in VALID_INDIAN_STATES:
+        if not found:
             return None
 
+    # RTO code at positions 2,3 (or 2)
     rto0 = L2D.get(clean[2], clean[2])
     rto1 = L2D.get(clean[3], clean[3]) if len(clean) > 3 else ''
-    
+    if not rto0.isdigit() or (rto1 and not rto1.isdigit()):
+        return None
+
+    # Trailing 3 to 4 characters must be digits
     rest = clean[4:]
     if len(rest) < 3:
         return None
@@ -135,6 +160,7 @@ def normalize_indian_plate(raw_text):
     series_part = rest[:len(rest) - len(trailing_digits)]
     series_norm = ''.join([D2L.get(c, c) for c in series_part])
 
+    # Series part must be purely alphabetic, at most 3 chars
     if series_norm and (not series_norm.isalpha() or len(series_norm) > 3):
         return None
 
@@ -332,13 +358,16 @@ async def predict_video(file: UploadFile = File(...)):
 
     cap = cv2.VideoCapture(temp_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    # Track unique validated vehicle plates
-    plate_sightings = {}
+    # Sample ~10 frames per second of video to maintain high throughput and accuracy
+    sample_step = max(2, int(round(fps / 10.0)))
+
+    # Collect raw valid plate detections across all sampled frames
+    raw_detections = []
     frame_idx = 0
-    sample_step = 2
 
     crops_dir = os.path.join("uploads", "crops")
     os.makedirs(crops_dir, exist_ok=True)
@@ -352,7 +381,8 @@ async def predict_video(file: UploadFile = File(...)):
         if frame_idx % sample_step != 0:
             continue
 
-        results = detector(frame, conf=0.30, verbose=False)[0]
+        # Conf >= 0.40 ensures we only evaluate solid license plate candidates
+        results = detector(frame, conf=0.40, verbose=False)[0]
 
         if len(results.boxes) > 0:
             boxes = results.boxes.xyxy.cpu().numpy().astype(int)
@@ -363,13 +393,14 @@ async def predict_video(file: UploadFile = File(...)):
                 box_h = y2 - y1
                 box_w = x2 - x1
 
-                if box_h <= 10 or box_w <= 30:
+                # Filter out tiny smudges or weird aspect ratios
+                if box_h < 16 or box_w < 55:
                     continue
                 aspect_ratio = box_w / max(1, box_h)
                 if not (1.3 <= aspect_ratio <= 6.5):
                     continue
 
-                # Generous padding to prevent clipping of edge letters
+                # Add 8% margin padding to prevent clipping boundary characters
                 pad_w = int(box_w * 0.08)
                 pad_h = int(box_h * 0.08)
                 cx1 = max(0, x1 - pad_w)
@@ -382,30 +413,31 @@ async def predict_video(file: UploadFile = File(...)):
                     continue
 
                 enhanced = enhance_plate(crop)
-                ocr_res = ocr.readtext(enhanced, detail=0)
-                raw_str = "".join(ocr_res)
+                # Use detail=1 to inspect individual OCR character confidence
+                ocr_entries = ocr.readtext(enhanced, detail=1)
+                
+                # Combine words with confidence >= 0.45
+                valid_words = [entry[1] for entry in ocr_entries if len(entry) >= 3 and entry[2] >= 0.45]
+                raw_str = "".join(valid_words)
+                
+                # If filtered words yielded nothing, try combined string if max confidence is decent
+                if not raw_str and ocr_entries:
+                    max_entry_conf = max(entry[2] for entry in ocr_entries if len(entry) >= 3)
+                    if max_entry_conf >= 0.50:
+                        raw_str = "".join(entry[1] for entry in ocr_entries)
+
                 formatted = normalize_indian_plate(raw_str)
 
                 # Strictly valid Indian license plates only
                 if formatted:
-                    if formatted not in plate_sightings:
-                        v_color, v_model = predict_visual_attributes(frame)
-                        plate_sightings[formatted] = {
-                            "plate": formatted,
-                            "count": 1,
-                            "max_conf": float(conf),
-                            "best_crop": crop,
-                            "best_h": box_h,
-                            "visual_color": v_color,
-                            "visual_model": v_model
-                        }
-                    else:
-                        plate_sightings[formatted]["count"] += 1
-                        if float(conf) > plate_sightings[formatted]["max_conf"]:
-                            plate_sightings[formatted]["max_conf"] = float(conf)
-                        if box_h > plate_sightings[formatted]["best_h"]:
-                            plate_sightings[formatted]["best_h"] = box_h
-                            plate_sightings[formatted]["best_crop"] = crop
+                    raw_detections.append({
+                        "plate": formatted,
+                        "conf": float(conf),
+                        "crop": crop,
+                        "box_h": box_h,
+                        "frame": frame,
+                        "frame_idx": frame_idx
+                    })
 
     cap.release()
     if os.path.exists(temp_path):
@@ -414,26 +446,71 @@ async def predict_video(file: UploadFile = File(...)):
         except Exception:
             pass
 
+    if not raw_detections:
+        return []
+
+    # 3. Cluster similar plate reads (Levenshtein distance <= 1) to eliminate OCR flip duplicates
+    clusters = []
+    for det in raw_detections:
+        p = det["plate"]
+        matched_cluster = None
+        for c in clusters:
+            if levenshtein_dist(p, c["rep_plate"]) <= 1:
+                matched_cluster = c
+                break
+
+        if matched_cluster:
+            matched_cluster["readings"].append(det)
+            matched_cluster["votes"][p] = matched_cluster["votes"].get(p, 0) + 1
+        else:
+            clusters.append({
+                "rep_plate": p,
+                "readings": [det],
+                "votes": {p: 1}
+            })
+
+    # 4. Anti-Spam Persistence Filtering:
+    # A true vehicle sighting must appear in at least 2 distinct frames (or 1 frame with high confidence for tiny clips)
+    min_required_votes = 2 if total_frames >= 20 else 1
+
     sightings = []
     ts_base = datetime.now()
-    for plate, data in plate_sightings.items():
+
+    for c in clusters:
+        total_votes = sum(c["votes"].values())
+        max_conf = max(r["conf"] for r in c["readings"])
+
+        if total_votes < min_required_votes and max_conf < 0.70:
+            # Single-frame transient noise/glitch: skip!
+            continue
+
+        # Choose the dominant plate string among clustered votes
+        dominant_plate = max(c["votes"].items(), key=lambda x: x[1])[0]
+
+        # Choose the sharpest/largest crop for visualization
+        best_reading = max(c["readings"], key=lambda r: (r["box_h"], r["conf"]))
+        best_crop = best_reading["crop"]
+
         crop_path = None
-        if data["best_crop"] is not None:
+        if best_crop is not None:
             ts = int(ts_base.timestamp() * 1000)
-            fname = f"video_crop_{ts}_{plate}.jpg"
+            fname = f"video_crop_{ts}_{dominant_plate}.jpg"
             save_fpath = os.path.join(crops_dir, fname)
-            cv2.imwrite(save_fpath, data["best_crop"])
+            cv2.imwrite(save_fpath, best_crop)
             crop_path = f"/uploads/crops/{fname}"
 
+        # Classify vehicle visual attributes
+        v_color, v_model = predict_visual_attributes(best_reading["frame"])
+
         sightings.append({
-            "plate_number": plate,
-            "plateNumber": plate,
-            "visual_color": data["visual_color"],
-            "visual_model": data["visual_model"],
-            "confidence": round(data["max_conf"], 2) if data["max_conf"] > 0 else 0.92,
+            "plate_number": dominant_plate,
+            "plateNumber": dominant_plate,
+            "visual_color": v_color,
+            "visual_model": v_model,
+            "confidence": round(max_conf, 2),
             "timestamp": ts_base.isoformat(),
             "cropImagePath": crop_path,
-            "occurrences": data["count"]
+            "occurrences": total_votes
         })
 
     return sightings
