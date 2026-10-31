@@ -52,14 +52,28 @@ function Navbar({ user, onLogout, backendHealth }) {
           title={`Click to configure backend URL (Active: ${window.__CURRENT_BACKEND_URL__ || (typeof window !== 'undefined' ? window.location.origin : '')})`}
           style={{ cursor: 'pointer' }}
           onClick={() => {
-            const current = window.__CURRENT_BACKEND_URL__ || (typeof window !== 'undefined' ? window.location.origin : '');
+            const current = window.__CURRENT_BACKEND_URL__ ||
+              localStorage.getItem('custom_api_url') ||
+              (typeof window !== 'undefined' ? window.location.origin : '');
             const choice = window.prompt(
-              `Current Backend: ${current}\n\nEnter your active tunnel URL (e.g. https://xxxx.loca.lt)\nOr type 'reset' to use Render cloud:\nOr type 'localhost' to use http://localhost:5000:`,
+              `Current Backend: ${current}\n\nPaste your NEW tunnel URL (e.g. https://xxxx.loca.lt)\nOr type 'reset' to use Render cloud:\nOr type 'localhost' for http://localhost:5000:`,
               current
             );
-            if (choice !== null && window.setActiveBackendUrl) {
-              window.setActiveBackendUrl(choice === 'localhost' ? 'http://localhost:5000' : choice);
+            if (choice === null) return;
+            const normalized = choice === 'localhost'
+              ? 'http://localhost:5000'
+              : choice.trim().replace(/\/$/, '');
+            if (normalized === 'reset' || normalized === 'render' || normalized === '') {
+              localStorage.removeItem('custom_api_url');
+            } else {
+              localStorage.setItem('custom_api_url', normalized);
             }
+            // Dispatch event so components update without full reload
+            try {
+              window.dispatchEvent(new CustomEvent('backend-url-changed', { detail: { url: normalized } }));
+            } catch (e) {}
+            // Full reload so the fetch interceptor picks up the new URL cleanly
+            window.location.reload();
           }}
         >
           <span className={`status-dot ${isHealthy ? 'online' : 'offline'}`}></span>

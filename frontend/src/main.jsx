@@ -27,30 +27,36 @@ export function getActiveBackendUrl() {
   return import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL || DEFAULT_RENDER_BACKEND;
 }
 
-export function setActiveBackendUrl(url) {
+export function setActiveBackendUrl(url, { reload = true } = {}) {
   if (typeof window === 'undefined') return;
   if (!url || url === 'reset' || url === 'render') {
     localStorage.removeItem('custom_api_url');
   } else {
     localStorage.setItem('custom_api_url', url.trim().replace(/\/$/, ''));
   }
-  window.location.reload();
+  // Notify components listening for backend URL changes (no reload needed for in-page updates)
+  try {
+    window.dispatchEvent(new CustomEvent('backend-url-changed', { detail: { url: getActiveBackendUrl() } }));
+  } catch (e) {}
+  if (reload) window.location.reload();
 }
 
 window.getActiveBackendUrl = getActiveBackendUrl;
 window.setActiveBackendUrl = setActiveBackendUrl;
 
-if (
-  typeof window !== 'undefined' &&
-  window.location.hostname !== 'localhost' &&
-  window.location.hostname !== '127.0.0.1'
-) {
+if (typeof window !== 'undefined') {
   const originalFetch = window.fetch;
   window.fetch = function (resource, init) {
     const currentBackend = getActiveBackendUrl().replace(/\/$/, '');
     window.__CURRENT_BACKEND_URL__ = currentBackend;
 
-    if (typeof resource === 'string') {
+    // Only rewrite relative /api and /uploads paths when NOT on localhost
+    // (on localhost the dev proxy or direct backend handles them)
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    if (!isLocalhost && typeof resource === 'string') {
       if (resource.startsWith('/api') || resource.startsWith('/uploads')) {
         resource = `${currentBackend}${resource}`;
       } else if (
@@ -68,11 +74,19 @@ if (
       headers.set('bypass-tunnel-reminder', 'true');
       init.headers = headers;
 
-      // Also append query param for non-preflight requests
+      // Also append query param for good measure
       if (!resource.includes('bypass-tunnel-reminder')) {
         const separator = resource.includes('?') ? '&' : '?';
         resource = `${resource}${separator}bypass-tunnel-reminder=1`;
       }
+    }
+
+    // Bypass ngrok browser warning if ngrok tunnel is used
+    if (typeof resource === 'string' && resource.includes('ngrok')) {
+      init = init || {};
+      const headers = new Headers(init.headers || {});
+      headers.set('ngrok-skip-browser-warning', 'true');
+      init.headers = headers;
     }
 
     return originalFetch.call(this, resource, init);

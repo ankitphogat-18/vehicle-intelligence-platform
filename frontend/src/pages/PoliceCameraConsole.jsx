@@ -1,4 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+
+// Read the active backend URL from localStorage/env without triggering a reload
+function readActiveBackendUrl() {
+  if (typeof window === 'undefined') return '';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const paramApi = params.get('api');
+    if (paramApi && paramApi !== 'reset' && paramApi !== 'render') return paramApi;
+    const saved = localStorage.getItem('custom_api_url');
+    if (saved) return saved;
+  } catch (e) {}
+  return 'https://vehicle-intelligence-platform-xun1.onrender.com';
+}
 
 const CAMERA_PRESETS = [
   { id: 'CAM-CHD-01', name: 'CAM-CHD-01: Tribune Chowk (Sector 29/31)' },
@@ -34,7 +47,10 @@ function PoliceCameraConsole() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
-const [uploadError, setUploadError] = useState(null);
+  const [uploadError, setUploadError] = useState(null);
+  // Inline backend URL editor (no page reload when fixing tunnel URL)
+  const [showUrlEditor, setShowUrlEditor] = useState(false);
+  const [backendUrlInput, setBackendUrlInput] = useState('');
 
 // Image Upload state
   const [imageFile, setImageFile] = useState(null);
@@ -1257,46 +1273,135 @@ const [uploadError, setUploadError] = useState(null);
             )}
 
             {uploadError && (
-              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '0.85rem', borderRadius: '6px', fontSize: '0.85rem' }}>
-                <div style={{ fontWeight: '600', marginBottom: '0.4rem' }}>{uploadError}</div>
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newUrl = window.prompt('Enter your active backend or tunnel URL (e.g. https://xxxx.loca.lt):');
-                      if (newUrl && window.setActiveBackendUrl) window.setActiveBackendUrl(newUrl);
-                    }}
-                    style={{
-                      padding: '0.3rem 0.6rem',
-                      backgroundColor: '#ef4444',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem',
-                      fontWeight: '700',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Change Backend URL
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.setActiveBackendUrl) window.setActiveBackendUrl('reset');
-                    }}
-                    style={{
-                      padding: '0.3rem 0.6rem',
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                      color: '#f8fafc',
-                      border: '1px solid rgba(255, 255, 255, 0.2)',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Reset to Cloud (Render)
-                  </button>
-                </div>
+              <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#f87171', padding: '0.85rem', borderRadius: '6px', fontSize: '0.85rem' }}>
+                <div style={{ fontWeight: '600', marginBottom: '0.5rem' }}>⚠️ {uploadError}</div>
+
+                {!showUrlEditor ? (
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBackendUrlInput(readActiveBackendUrl());
+                        setShowUrlEditor(true);
+                      }}
+                      style={{
+                        padding: '0.35rem 0.75rem',
+                        backgroundColor: '#ef4444',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        fontWeight: '700',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🔗 Update Tunnel URL (No Reload)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.removeItem('custom_api_url');
+                        window.dispatchEvent(new CustomEvent('backend-url-changed', { detail: { url: 'https://vehicle-intelligence-platform-xun1.onrender.com' } }));
+                        setUploadError(null);
+                        setUploadResult(null);
+                      }}
+                      style={{
+                        padding: '0.35rem 0.75rem',
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        color: '#f8fafc',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        borderRadius: '4px',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ☁️ Reset to Cloud (Render)
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: '0.6rem' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#fca5a5', marginBottom: '0.35rem' }}>
+                      Paste your new tunnel URL below — your video file will NOT be lost:
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      <input
+                        type="url"
+                        value={backendUrlInput}
+                        onChange={e => setBackendUrlInput(e.target.value)}
+                        placeholder="https://xxxx.loca.lt"
+                        style={{
+                          flex: 1,
+                          minWidth: '220px',
+                          padding: '0.4rem 0.65rem',
+                          backgroundColor: '#0f172a',
+                          border: '1px solid rgba(239,68,68,0.5)',
+                          borderRadius: '4px',
+                          color: '#f8fafc',
+                          fontSize: '0.8rem',
+                          outline: 'none'
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const trimmed = backendUrlInput.trim().replace(/\/$/, '');
+                            if (trimmed) {
+                              localStorage.setItem('custom_api_url', trimmed);
+                              window.dispatchEvent(new CustomEvent('backend-url-changed', { detail: { url: trimmed } }));
+                              setShowUrlEditor(false);
+                              setUploadError(null);
+                              setUploadResult(null);
+                            }
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const trimmed = backendUrlInput.trim().replace(/\/$/, '');
+                          if (trimmed) {
+                            localStorage.setItem('custom_api_url', trimmed);
+                            window.dispatchEvent(new CustomEvent('backend-url-changed', { detail: { url: trimmed } }));
+                            setShowUrlEditor(false);
+                            setUploadError(null);
+                            setUploadResult(null);
+                          }
+                        }}
+                        style={{
+                          padding: '0.4rem 0.85rem',
+                          backgroundColor: '#22c55e',
+                          color: '#000',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '0.78rem',
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        ✓ Apply & Retry
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowUrlEditor(false)}
+                        style={{
+                          padding: '0.4rem 0.65rem',
+                          backgroundColor: 'rgba(255,255,255,0.06)',
+                          color: '#94a3b8',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '4px',
+                          fontSize: '0.78rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '0.4rem' }}>
+                      💡 After clicking Apply, click "Process Video Feed" again to retry.
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
