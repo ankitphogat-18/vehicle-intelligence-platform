@@ -90,7 +90,15 @@ app.get('/api/mobile-qr', async (req, res) => {
       host = localIp;
     }
 
-    const mobileUrl = `${protocol}://${host}:${port}/mobile.html`;
+    // Only append port if connecting directly via local LAN IP or localhost on HTTP.
+    // Public tunnels (localtunnel, ngrok) and cloud hosts (Render) listen on standard ports 80/443;
+    // appending :5000 to a tunnel causes ERR_CONNECTION_REFUSED on mobile phones.
+    const isRawIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(host);
+    const isPublicTunnelOrCloud = host.includes('.') && !isRawIp;
+    const shouldIncludePort = !isPublicTunnelOrCloud && protocol === 'http';
+    const portSuffix = shouldIncludePort ? `:${port}` : '';
+
+    const mobileUrl = `${protocol}://${host}${portSuffix}/mobile.html`;
     const qrImage = await QRCode.toDataURL(mobileUrl, {
       errorCorrectionLevel: 'M',
       margin: 2,

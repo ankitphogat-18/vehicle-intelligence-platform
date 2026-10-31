@@ -619,8 +619,17 @@
         formData.append('latitude', currentLat);
         formData.append('longitude', currentLng);
 
+        const reqHeaders = {};
+        if (window.location.hostname.includes('loca.lt')) {
+          reqHeaders['bypass-tunnel-reminder'] = 'true';
+        }
+        if (window.location.hostname.includes('ngrok')) {
+          reqHeaders['ngrok-skip-browser-warning'] = 'true';
+        }
+
         const response = await fetch(INGEST_ENDPOINT, {
           method: 'POST',
+          headers: reqHeaders,
           body: formData
         });
 
