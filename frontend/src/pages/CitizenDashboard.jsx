@@ -2,48 +2,44 @@ import React, { useState, useEffect } from 'react';
 import {
   Car,
   ShieldAlert,
+  PlusCircle,
+  FileText,
   CheckCircle2,
   AlertTriangle,
-  Upload,
-  FileText,
   Clock,
-  ArrowRight,
-  ExternalLink,
-  PlusCircle,
-  Radio,
-  FileCheck,
-  RefreshCw,
   XCircle,
+  Upload,
+  RefreshCw,
+  ExternalLink,
+  ChevronRight,
+  Radio,
   Lock
 } from 'lucide-react';
 
-function CitizenDashboard({ initialTab = 'list' }) {
-  const [activeTab, setActiveTab] = useState(initialTab); // 'list' or 'register'
+function CitizenDashboard() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [formLoading, setFormLoading] = useState(false);
-  const [actionLoadingId, setActionLoadingId] = useState(null);
   const [error, setError] = useState(null);
-  const [formSuccess, setFormSuccess] = useState(null);
+  const [activeTab, setActiveTab] = useState('list'); // 'list' | 'register'
 
-  // File upload state for RC Document
-  const [rcFile, setRcFile] = useState(null);
-  const [rcFileName, setRcFileName] = useState('');
-
-  // Confirmation modal state for reporting stolen
-  const [confirmVehicle, setConfirmVehicle] = useState(null);
-
+  // Form State
   const [formData, setFormData] = useState({
     plateNumber: '',
     makeModel: '',
     color: ''
   });
+  const [rcFile, setRcFile] = useState(null);
+  const [rcFileName, setRcFileName] = useState('');
+  const [formLoading, setFormLoading] = useState(false);
+  const [formSuccess, setFormSuccess] = useState(null);
+
+  // Confirm report stolen modal
+  const [confirmVehicle, setConfirmVehicle] = useState(null);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
-    return {
-      Authorization: `Bearer ${token}`
-    };
+    return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
   const fetchMyVehicles = async () => {
@@ -58,7 +54,7 @@ function CitizenDashboard({ initialTab = 'list' }) {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || data.error || 'Failed to load vehicles');
+        throw new Error(data.message || data.error || 'Failed to fetch registered vehicles');
       }
       setVehicles(data.data || []);
     } catch (err) {
@@ -72,27 +68,19 @@ function CitizenDashboard({ initialTab = 'list' }) {
     fetchMyVehicles();
   }, []);
 
-  useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
-
   const handleInputChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
     setError(null);
-    setFormSuccess(null);
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
+    const file = e.target.files[0];
+    if (file) {
       setRcFile(file);
       setRcFileName(file.name);
-    } else {
-      setRcFile(null);
-      setRcFileName('');
     }
   };
 
@@ -103,28 +91,30 @@ function CitizenDashboard({ initialTab = 'list' }) {
     setFormSuccess(null);
 
     try {
-      const submitData = new FormData();
-      submitData.append('plateNumber', formData.plateNumber.trim().toUpperCase());
-      submitData.append('makeModel', formData.makeModel.trim());
-      submitData.append('color', formData.color.trim());
-
+      const bodyFormData = new FormData();
+      bodyFormData.append('plateNumber', formData.plateNumber.trim().toUpperCase());
+      bodyFormData.append('makeModel', formData.makeModel.trim());
+      if (formData.color.trim()) {
+        bodyFormData.append('color', formData.color.trim());
+      }
       if (rcFile) {
-        submitData.append('rcDocument', rcFile);
+        bodyFormData.append('rcDocument', rcFile);
       }
 
       const res = await fetch('/api/vehicles/register', {
         method: 'POST',
-        headers: getAuthHeaders(),
-        body: submitData
+        headers: {
+          ...getAuthHeaders()
+        },
+        body: bodyFormData
       });
 
       const data = await res.json();
-
       if (!res.ok || !data.success) {
         throw new Error(data.message || data.error || 'Registration failed');
       }
 
-      setFormSuccess(`✓ Vehicle ${formData.plateNumber.trim().toUpperCase()} registered successfully! Submitted for police verification.`);
+      setFormSuccess(`✓ Vehicle ${data.data.plateNumber} submitted! Police verification pending.`);
       setFormData({ plateNumber: '', makeModel: '', color: '' });
       setRcFile(null);
       setRcFileName('');
@@ -139,29 +129,30 @@ function CitizenDashboard({ initialTab = 'list' }) {
 
   const handleConfirmReportStolen = async () => {
     if (!confirmVehicle) return;
-    const v = confirmVehicle;
-    setConfirmVehicle(null);
-    setActionLoadingId(v._id);
+    const vId = confirmVehicle._id;
+    setActionLoadingId(vId);
     setError(null);
     setFormSuccess(null);
 
     try {
-      const res = await fetch(`/api/vehicles/${v._id}/stolen`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/vehicles/${vId}/report-stolen`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
-        body: JSON.stringify({ isStolen: true })
+        body: JSON.stringify({
+          incidentNotes: 'Reported stolen via Citizen Telemetry Portal'
+        })
       });
 
       const data = await res.json();
-
       if (!res.ok || !data.success) {
-        throw new Error(data.message || data.error || 'Failed to report stolen vehicle');
+        throw new Error(data.message || data.error || 'Failed to report vehicle stolen');
       }
 
-      setFormSuccess(`🚨 High-Priority Stolen Alert broadcasted! Vehicle ${v.plateNumber} is now active on all police highway ANPR checkpoints.`);
+      setFormSuccess(`🚨 Hotlist alert broadcast! Vehicle ${confirmVehicle.plateNumber} is now tracked across all municipal checkpoints.`);
+      setConfirmVehicle(null);
       fetchMyVehicles();
     } catch (err) {
       setError(err.message);
@@ -213,51 +204,65 @@ function CitizenDashboard({ initialTab = 'list' }) {
   const getTimelineBadge = (status) => {
     switch (status) {
       case 'APPROVED':
-        return { label: 'Verified & Approved', color: '#34d399', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.3)' };
+        return { label: 'Verified & Approved', isLight: true };
       case 'REJECTED':
-        return { label: 'Registration Rejected', color: '#f87171', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.3)' };
+        return { label: 'Registration Rejected', isLight: false };
       case 'SEARCH_IN_PROGRESS':
       case 'PATROL_ALERTED':
-        return { label: 'ANPR Interception Active', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.2)', border: 'rgba(239, 68, 68, 0.5)' };
+        return { label: 'ANPR Interception Active', isLight: true };
       case 'VEHICLE_FOUND':
-        return { label: 'Vehicle Recovered', color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.15)', border: 'rgba(56, 189, 248, 0.3)' };
+        return { label: 'Vehicle Recovered', isLight: true };
       case 'PENDING':
       case 'VERIFICATION_UNDER_REVIEW':
       default:
-        return { label: 'Under Verification', color: '#fbbf24', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.3)' };
+        return { label: 'Under Verification', isLight: false };
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans selection:bg-red-500 selection:text-white p-4 sm:p-6 lg:p-8">
-      {/* Centered Main Container styled exactly like #live-demo dark card */}
-      <div className="max-w-6xl mx-auto rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl p-6 sm:p-10 relative overflow-hidden">
-        {/* Subtle Accent Glow */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-red-500/10 blur-[90px] rounded-full pointer-events-none"></div>
+    <div className="min-h-screen bg-black text-white font-sans selection:bg-white selection:text-black p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+      {/* Topographic Background Overlay */}
+      <div className="absolute inset-0 opacity-15 pointer-events-none">
+        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+          <defs>
+            <pattern id="topo-citizen" width="140" height="140" patternUnits="userSpaceOnUse">
+              <path
+                d="M 0 35 Q 35 10, 70 35 T 140 35 M 0 70 Q 35 95, 70 70 T 140 70 M 0 105 Q 35 80, 70 105 T 140 105"
+                fill="none"
+                stroke="rgba(255,255,255,0.3)"
+                strokeWidth="1"
+              />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#topo-citizen)" />
+        </svg>
+      </div>
 
+      {/* Main Container */}
+      <div className="max-w-6xl mx-auto rounded-3xl bg-[#090909] border border-neutral-800 shadow-2xl p-6 sm:p-10 relative overflow-hidden">
         {/* Header Bar */}
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-slate-800">
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-neutral-800">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-950/60 border border-red-800/80 text-xs font-mono font-bold text-red-400 uppercase tracking-wider mb-2">
-              <Radio className="w-3.5 h-3.5 text-red-400 animate-pulse" />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-xs font-mono font-bold text-white uppercase tracking-wider mb-3">
+              <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
               CITIZEN TELEMETRY & REGISTRY PORTAL
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight uppercase">
               My Vehicle Registry & Theft Alert Center
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
+            <p className="text-xs sm:text-sm text-neutral-400 mt-1 max-w-xl">
               Register vehicles with official RC proof, track police verification status, and instantly broadcast stolen alerts to the highway ANPR camera network.
             </p>
           </div>
 
           {/* Tab Selector Pills */}
-          <div className="flex items-center gap-1.5 p-1 rounded-full bg-slate-950 border border-slate-800 self-stretch sm:self-auto">
+          <div className="flex items-center gap-1.5 p-1 rounded-full bg-neutral-900 border border-neutral-800 self-stretch sm:self-auto">
             <button
               onClick={() => setActiveTab('list')}
-              className={`flex-1 sm:flex-none px-5 py-2 rounded-full text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'list'
-                  ? 'bg-red-500 text-white shadow-md shadow-red-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
               }`}
             >
               <Car className="w-3.5 h-3.5" />
@@ -265,10 +270,10 @@ function CitizenDashboard({ initialTab = 'list' }) {
             </button>
             <button
               onClick={() => setActiveTab('register')}
-              className={`flex-1 sm:flex-none px-5 py-2 rounded-full text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-full text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'register'
-                  ? 'bg-red-500 text-white shadow-md shadow-red-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                  ? 'bg-white text-black shadow-md'
+                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
               }`}
             >
               <PlusCircle className="w-3.5 h-3.5" />
@@ -279,54 +284,54 @@ function CitizenDashboard({ initialTab = 'list' }) {
 
         {/* Global Notifications */}
         {error && (
-          <div className="mt-6 p-4 rounded-xl bg-red-950/60 border border-red-800 text-red-300 text-sm flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 shrink-0 text-red-400" />
+          <div className="mt-6 p-4 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 text-sm flex items-center gap-3 font-mono">
+            <AlertTriangle className="w-5 h-5 shrink-0 text-white" />
             <span>{error}</span>
           </div>
         )}
 
         {formSuccess && (
-          <div className="mt-6 p-4 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-sm flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+          <div className="mt-6 p-4 rounded-xl bg-white text-black text-sm flex items-center gap-3 font-mono font-bold">
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-black" />
             <span>{formSuccess}</span>
           </div>
         )}
 
         {/* ────────────────────────────────────────────────────────
-            CONFIRM REPORT STOLEN MODAL
+            CONFIRM REPORT STOLEN MODAL (Monochrome)
             ──────────────────────────────────────────────────────── */}
         {confirmVehicle && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-            <div className="rounded-2xl bg-slate-900 border border-red-500/50 p-6 sm:p-8 max-w-md w-full shadow-2xl relative text-center">
-              <div className="w-14 h-14 rounded-2xl bg-red-950 border border-red-800 text-red-400 flex items-center justify-center mx-auto mb-4 animate-pulse">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+            <div className="rounded-2xl bg-black border border-neutral-700 p-6 sm:p-8 max-w-md w-full shadow-2xl relative text-center">
+              <div className="w-14 h-14 rounded-2xl bg-white text-black flex items-center justify-center mx-auto mb-4">
                 <ShieldAlert className="w-7 h-7" />
               </div>
 
-              <h3 className="text-xl font-black text-white mb-2">
+              <h3 className="text-xl font-black text-white mb-2 uppercase tracking-tight">
                 Broadcast Stolen Vehicle Alert?
               </h3>
 
-              <p className="text-xs sm:text-sm text-slate-300 mb-4 leading-relaxed">
-                Are you sure you want to flag vehicle <span className="font-mono font-bold text-red-400">{confirmVehicle.plateNumber}</span> as stolen?
+              <p className="text-xs sm:text-sm text-neutral-400 mb-4 leading-relaxed">
+                Are you sure you want to flag vehicle <span className="font-mono font-bold text-white underline underline-offset-4">{confirmVehicle.plateNumber}</span> as stolen?
                 This activates instantaneous optical interception across all municipal ANPR checkpoints.
               </p>
 
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 font-mono text-xs text-left mb-6 space-y-1">
-                <div><span className="text-slate-500">PLATE:</span> <span className="font-bold text-white">{confirmVehicle.plateNumber}</span></div>
-                <div><span className="text-slate-500">MAKE:</span> <span className="text-slate-300">{confirmVehicle.makeModel}</span></div>
-                <div><span className="text-slate-500">TARGET:</span> <span className="text-red-400 font-bold">STATE-WIDE HOTLIST BROADCAST</span></div>
+              <div className="p-3.5 rounded-xl bg-neutral-900 border border-neutral-800 font-mono text-xs text-left mb-6 space-y-1">
+                <div><span className="text-neutral-500">PLATE:</span> <span className="font-bold text-white">{confirmVehicle.plateNumber}</span></div>
+                <div><span className="text-neutral-500">MAKE:</span> <span className="text-neutral-300">{confirmVehicle.makeModel}</span></div>
+                <div><span className="text-neutral-500">TARGET:</span> <span className="text-white font-bold">MUNICIPAL HIGHWAY INTERDICTION FEED</span></div>
               </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={handleConfirmReportStolen}
-                  className="flex-1 py-3 px-4 rounded-full bg-red-500 hover:bg-red-600 text-white font-black uppercase tracking-wider text-xs shadow-lg shadow-red-500/30 transition-all"
+                  className="flex-1 py-3 px-4 rounded-full bg-white hover:bg-neutral-200 text-black font-black uppercase tracking-wider text-xs shadow-lg transition-all"
                 >
                   Confirm & Broadcast
                 </button>
                 <button
                   onClick={() => setConfirmVehicle(null)}
-                  className="py-3 px-5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold uppercase tracking-wider text-xs border border-slate-700 transition-all"
+                  className="py-3 px-5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold uppercase tracking-wider text-xs border border-neutral-700 transition-all"
                 >
                   Cancel
                 </button>
@@ -339,17 +344,17 @@ function CitizenDashboard({ initialTab = 'list' }) {
             TAB 1: REGISTER VEHICLE FORM
             ──────────────────────────────────────────────────────── */}
         {activeTab === 'register' && (
-          <div className="mt-8 max-w-2xl mx-auto rounded-2xl bg-slate-950/90 border border-slate-800 p-6 sm:p-8 shadow-xl">
+          <div className="mt-8 max-w-2xl mx-auto rounded-2xl bg-black border border-neutral-800 p-6 sm:p-8 shadow-xl">
             <div className="mb-6">
-              <h2 className="text-xl font-black text-white">Register New Vehicle</h2>
-              <p className="text-xs text-slate-400 mt-1">
+              <h2 className="text-xl font-black text-white uppercase tracking-tight">Register New Vehicle</h2>
+              <p className="text-xs text-neutral-400 mt-1">
                 Submit official details and upload your Registration Certificate (RC) proof for cyber cell verification.
               </p>
             </div>
 
             <form onSubmit={handleRegisterSubmit} className="space-y-5">
               <div>
-                <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                <label className="block text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 mb-1.5">
                   License Plate Number *
                 </label>
                 <input
@@ -359,12 +364,12 @@ function CitizenDashboard({ initialTab = 'list' }) {
                   onChange={handleInputChange}
                   required
                   placeholder="e.g. DL 01 AB 1234 or HR 26 DQ 5678"
-                  className="w-full bg-slate-900 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-xl px-4 py-3 text-sm font-mono text-white placeholder-slate-600 outline-none uppercase transition-all"
+                  className="w-full bg-neutral-900 border border-neutral-800 focus:border-white focus:ring-1 focus:ring-white rounded-xl px-4 py-3 text-sm font-mono text-white placeholder-neutral-600 outline-none uppercase transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                <label className="block text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 mb-1.5">
                   Vehicle Make & Model *
                 </label>
                 <input
@@ -374,12 +379,12 @@ function CitizenDashboard({ initialTab = 'list' }) {
                   onChange={handleInputChange}
                   required
                   placeholder="e.g. Mahindra Scorpio-N, Tata Nexon EV, Hyundai Creta"
-                  className="w-full bg-slate-900 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                  className="w-full bg-neutral-900 border border-neutral-800 focus:border-white focus:ring-1 focus:ring-white rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 outline-none transition-all"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                <label className="block text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 mb-1.5">
                   Vehicle Color
                 </label>
                 <input
@@ -387,19 +392,19 @@ function CitizenDashboard({ initialTab = 'list' }) {
                   name="color"
                   value={formData.color}
                   onChange={handleInputChange}
-                  placeholder="e.g. Obsidian Black, Glacier Blue, Pearl White"
-                  className="w-full bg-slate-900 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                  placeholder="e.g. Obsidian Black, Glacier White, Silver Metallic"
+                  className="w-full bg-neutral-900 border border-neutral-800 focus:border-white focus:ring-1 focus:ring-white rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 outline-none transition-all"
                 />
               </div>
 
               {/* RC Document Upload */}
               <div>
-                <label className="block text-xs font-mono font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                <label className="block text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 mb-1.5">
                   Upload Official RC Document Proof (PDF, PNG, JPG)
                 </label>
                 <div
                   onClick={() => document.getElementById('rcFileInput').click()}
-                  className="border-2 border-dashed border-slate-800 hover:border-slate-600 rounded-2xl p-6 bg-slate-900/60 text-center cursor-pointer transition-all group"
+                  className="border-2 border-dashed border-neutral-800 hover:border-neutral-600 rounded-2xl p-6 bg-neutral-900/60 text-center cursor-pointer transition-all group"
                 >
                   <input
                     id="rcFileInput"
@@ -408,21 +413,21 @@ function CitizenDashboard({ initialTab = 'list' }) {
                     onChange={handleFileChange}
                     className="hidden"
                   />
-                  <div className="w-12 h-12 rounded-xl bg-slate-800 text-red-400 flex items-center justify-center mx-auto mb-3 group-hover:scale-105 transition-transform">
+                  <div className="w-12 h-12 rounded-xl bg-neutral-800 text-white flex items-center justify-center mx-auto mb-3 group-hover:scale-105 transition-transform">
                     <Upload className="w-6 h-6" />
                   </div>
 
                   {rcFileName ? (
                     <div>
-                      <div className="font-mono font-bold text-sm text-red-400">{rcFileName}</div>
-                      <div className="text-xs text-emerald-400 mt-1">
+                      <div className="font-mono font-bold text-sm text-white">{rcFileName}</div>
+                      <div className="text-xs text-neutral-400 mt-1">
                         ✓ Selected ({((rcFile?.size || 0) / 1024).toFixed(1)} KB)
                       </div>
                     </div>
                   ) : (
                     <div>
                       <div className="text-sm font-bold text-white">Click to Browse or Drag & Drop RC Document</div>
-                      <div className="text-xs text-slate-500 mt-1 font-mono">Max size: 20MB • PDF, PNG, JPG</div>
+                      <div className="text-xs text-neutral-500 mt-1 font-mono">Max size: 20MB • PDF, PNG, JPG</div>
                     </div>
                   )}
                 </div>
@@ -432,14 +437,14 @@ function CitizenDashboard({ initialTab = 'list' }) {
                 <button
                   type="submit"
                   disabled={formLoading}
-                  className="flex-1 py-3.5 px-6 rounded-full bg-red-500 hover:bg-red-600 text-white font-black uppercase tracking-wider text-xs shadow-lg shadow-red-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 py-3.5 px-6 rounded-full bg-white hover:bg-neutral-200 text-black font-black uppercase tracking-wider text-xs shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {formLoading ? 'SUBMITTING REGISTRATION...' : 'SUBMIT FOR POLICE VERIFICATION'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('list')}
-                  className="py-3.5 px-6 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold uppercase tracking-wider text-xs border border-slate-700 transition-all"
+                  className="py-3.5 px-6 rounded-full bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-bold uppercase tracking-wider text-xs border border-neutral-700 transition-all"
                 >
                   Cancel
                 </button>
@@ -454,22 +459,22 @@ function CitizenDashboard({ initialTab = 'list' }) {
         {activeTab === 'list' && (
           <div className="mt-8">
             {loading ? (
-              <div className="py-20 text-center text-slate-400 font-mono text-sm flex flex-col items-center justify-center gap-3">
-                <RefreshCw className="w-6 h-6 animate-spin text-red-500" />
+              <div className="py-20 text-center text-neutral-400 font-mono text-sm flex flex-col items-center justify-center gap-3">
+                <RefreshCw className="w-6 h-6 animate-spin text-white" />
                 <span>Loading registered vehicles from VAHAN database...</span>
               </div>
             ) : vehicles.length === 0 ? (
-              <div className="rounded-2xl bg-slate-950/80 border border-slate-800 p-12 text-center max-w-lg mx-auto">
-                <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 text-slate-500 flex items-center justify-center mx-auto mb-4">
+              <div className="rounded-2xl bg-black border border-neutral-800 p-12 text-center max-w-lg mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-neutral-900 border border-neutral-800 text-neutral-400 flex items-center justify-center mx-auto mb-4">
                   <Car className="w-8 h-8" />
                 </div>
-                <h3 className="text-lg font-black text-white mb-2">No Vehicles Registered Yet</h3>
-                <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+                <h3 className="text-lg font-black text-white mb-2 uppercase">No Vehicles Registered Yet</h3>
+                <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
                   You do not have any registered vehicles under your citizen profile. Register your vehicle to link it with optical checkpoint tracking and activate fast-track theft recovery.
                 </p>
                 <button
                   onClick={() => setActiveTab('register')}
-                  className="px-6 py-3 rounded-full bg-red-500 hover:bg-red-600 text-white font-extrabold uppercase tracking-wider text-xs shadow-md transition-all inline-flex items-center gap-2"
+                  className="px-6 py-3 rounded-full bg-white hover:bg-neutral-200 text-black font-extrabold uppercase tracking-wider text-xs shadow-md transition-all inline-flex items-center gap-2"
                 >
                   <PlusCircle className="w-4 h-4" />
                   <span>Register First Vehicle</span>
@@ -485,20 +490,20 @@ function CitizenDashboard({ initialTab = 'list' }) {
                   return (
                     <div
                       key={v._id}
-                      className={`rounded-2xl bg-slate-950/90 border transition-all p-6 sm:p-8 relative overflow-hidden shadow-xl ${
+                      className={`rounded-2xl bg-black border transition-all p-6 sm:p-8 relative overflow-hidden shadow-xl ${
                         v.isStolen
-                          ? 'border-red-500 ring-1 ring-red-500/50 shadow-red-500/10'
+                          ? 'border-white ring-1 ring-white/80'
                           : isApproved
-                          ? 'border-slate-800 hover:border-slate-700'
-                          : 'border-slate-800/80'
+                          ? 'border-neutral-800 hover:border-neutral-600'
+                          : 'border-neutral-800/80'
                       }`}
                     >
                       {/* Top Bar: Plate Visual & Status */}
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
-                        {/* High-Security Plate Badge Box (styled like the demo visual) */}
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-neutral-800">
+                        {/* High-Security Plate Badge Box */}
                         <div className="flex items-center gap-4">
-                          <div className="bg-white text-slate-950 px-4 py-2 rounded-lg border-2 border-slate-950 shadow-inner inline-flex flex-col items-center">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 font-mono">
+                          <div className="bg-white text-black px-4 py-2 rounded-lg border-2 border-black shadow-inner inline-flex flex-col items-center">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-neutral-600 font-mono">
                               IND // TRANSPORT
                             </span>
                             <span className="text-xl sm:text-2xl font-black font-mono tracking-wider">
@@ -507,8 +512,8 @@ function CitizenDashboard({ initialTab = 'list' }) {
                           </div>
 
                           <div>
-                            <div className="text-lg font-black text-white">{v.makeModel}</div>
-                            <div className="text-xs text-slate-400 font-mono">
+                            <div className="text-lg font-black text-white uppercase">{v.makeModel}</div>
+                            <div className="text-xs text-neutral-400 font-mono">
                               Color: {v.color || 'Not specified'} • Registered ID: {v._id?.slice(-8)}
                             </div>
                           </div>
@@ -517,24 +522,24 @@ function CitizenDashboard({ initialTab = 'list' }) {
                         {/* Status Badge */}
                         <div>
                           {v.isStolen ? (
-                            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-950 border border-red-700 text-xs font-mono font-bold text-red-400 animate-pulse">
-                              <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                              <span>🚨 REPORTED STOLEN // INTERCEPTION ACTIVE</span>
+                            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white text-black text-xs font-mono font-bold animate-pulse">
+                              <span className="w-2 h-2 rounded-full bg-black"></span>
+                              <span>REPORTED STOLEN // INTERCEPTION ACTIVE</span>
                             </div>
                           ) : isApproved ? (
-                            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-950/70 border border-emerald-800 text-xs font-mono font-bold text-emerald-400">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-900 border border-neutral-700 text-xs font-mono font-bold text-white">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                               <span>✓ VERIFIED VEHICLE</span>
                             </div>
                           ) : isRejected ? (
-                            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-950/50 border border-red-900 text-xs font-mono font-bold text-red-400">
+                            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-900 border border-neutral-700 text-xs font-mono font-bold text-neutral-400">
                               <XCircle className="w-3.5 h-3.5" />
                               <span>REGISTRATION REJECTED</span>
                             </div>
                           ) : (
-                            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-950/60 border border-amber-800 text-xs font-mono font-bold text-amber-400">
+                            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-900 border border-neutral-800 text-xs font-mono font-bold text-neutral-300">
                               <Clock className="w-3.5 h-3.5" />
-                              <span>⏳ UNDER VERIFICATION</span>
+                              <span>UNDER VERIFICATION</span>
                             </div>
                           )}
                         </div>
@@ -547,13 +552,13 @@ function CitizenDashboard({ initialTab = 'list' }) {
                           ? rawPath
                           : `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}${rawPath.startsWith('/') ? '' : '/'}${rawPath}`;
                         return (
-                          <div className="py-4 flex items-center justify-between text-xs border-b border-slate-800/80">
-                            <span className="text-slate-400">Official RC Document Proof:</span>
+                          <div className="py-4 flex items-center justify-between text-xs border-b border-neutral-800/80">
+                            <span className="text-neutral-400">Official RC Document Proof:</span>
                             <a
                               href={fullDoc}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 text-red-400 hover:text-red-300 font-mono font-bold"
+                              className="inline-flex items-center gap-1.5 text-white hover:underline font-mono font-bold"
                             >
                               <FileText className="w-3.5 h-3.5" />
                               <span>View Uploaded RC Proof</span>
@@ -564,22 +569,22 @@ function CitizenDashboard({ initialTab = 'list' }) {
                       })()}
 
                       {/* Cyber Cell Police Notes */}
-                      <div className="my-5 p-4 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono">
-                        <div className="flex items-center gap-2 text-slate-400 font-bold mb-1.5 uppercase tracking-wider">
-                          <Radio className="w-3.5 h-3.5 text-red-400" />
+                      <div className="my-5 p-4 rounded-xl bg-neutral-900/90 border border-neutral-800 text-xs font-mono">
+                        <div className="flex items-center gap-2 text-white font-bold mb-1.5 uppercase tracking-wider">
+                          <Radio className="w-3.5 h-3.5 text-white" />
                           <span>Law Enforcement & Cyber Cell Directives</span>
                         </div>
-                        <p className="text-slate-300 font-sans text-sm">
+                        <p className="text-neutral-300 font-sans text-sm">
                           {v.policeNotes || 'Registration dossier logged. Under routine optical audit by the Command Center.'}
                         </p>
                       </div>
 
                       {/* Timeline Progress */}
                       <div className="mb-6">
-                        <div className="text-xs font-mono uppercase tracking-wider text-slate-500 mb-3">
+                        <div className="text-xs font-mono uppercase tracking-wider text-neutral-500 mb-3">
                           Case Timeline & Event History
                         </div>
-                        <div className="space-y-3 pl-3 border-l-2 border-slate-800">
+                        <div className="space-y-3 pl-3 border-l-2 border-neutral-800">
                           {(v.statusTimeline && v.statusTimeline.length > 0 ? v.statusTimeline : [
                             {
                               status: isApproved ? 'APPROVED' : 'PENDING',
@@ -591,20 +596,24 @@ function CitizenDashboard({ initialTab = 'list' }) {
                             return (
                               <div key={sIdx} className="relative pl-4 text-xs font-mono">
                                 <div
-                                  className="absolute -left-[19px] top-1.5 w-2.5 h-2.5 rounded-full"
-                                  style={{ backgroundColor: badge.color }}
+                                  className={`absolute -left-[19px] top-1.5 w-2.5 h-2.5 rounded-full ${
+                                    badge.isLight ? 'bg-white' : 'bg-neutral-600'
+                                  }`}
                                 />
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
                                     <span
-                                      className="px-2 py-0.5 rounded text-[10px] font-bold"
-                                      style={{ backgroundColor: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}
+                                      className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                        badge.isLight
+                                          ? 'bg-white text-black border-white'
+                                          : 'bg-neutral-900 text-neutral-300 border-neutral-700'
+                                      }`}
                                     >
                                       {badge.label}
                                     </span>
                                     <span className="text-white font-sans">{step.message}</span>
                                   </div>
-                                  <span className="text-slate-500">{formatDateTime(step.updatedAt)}</span>
+                                  <span className="text-neutral-500">{formatDateTime(step.updatedAt)}</span>
                                 </div>
                               </div>
                             );
@@ -613,19 +622,19 @@ function CitizenDashboard({ initialTab = 'list' }) {
                       </div>
 
                       {/* Bottom Action Footer */}
-                      <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                      <div className="pt-4 border-t border-neutral-800 flex flex-wrap items-center justify-between gap-4">
                         {v.isStolen ? (
                           <>
                             <button
                               disabled={actionLoadingId === v._id}
                               onClick={() => handleMarkRecovered(v)}
-                              className="px-6 py-2.5 rounded-full bg-emerald-950 border border-emerald-700 text-emerald-400 hover:bg-emerald-900 font-bold uppercase tracking-wider text-xs transition-all flex items-center gap-2 disabled:opacity-50"
+                              className="px-6 py-2.5 rounded-full bg-white text-black hover:bg-neutral-200 font-bold uppercase tracking-wider text-xs transition-all flex items-center gap-2 disabled:opacity-50"
                             >
-                              <CheckCircle2 className="w-4 h-4" />
+                              <CheckCircle2 className="w-4 h-4 text-black" />
                               <span>Mark Vehicle As Recovered</span>
                             </button>
-                            <span className="text-xs font-mono text-red-400 font-bold">
-                              🚨 Live corridor checkpoint interdiction active
+                            <span className="text-xs font-mono text-white font-bold">
+                              LIVE CORRIDOR CHECKPOINT INTERDICTION ACTIVE
                             </span>
                           </>
                         ) : isApproved ? (
@@ -633,12 +642,12 @@ function CitizenDashboard({ initialTab = 'list' }) {
                             <button
                               disabled={actionLoadingId === v._id}
                               onClick={() => setConfirmVehicle(v)}
-                              className="px-6 py-2.5 rounded-full bg-red-500 hover:bg-red-600 text-white font-extrabold uppercase tracking-wider text-xs shadow-md shadow-red-500/25 transition-all flex items-center gap-2 disabled:opacity-50"
+                              className="px-6 py-2.5 rounded-full bg-white hover:bg-neutral-200 text-black font-extrabold uppercase tracking-wider text-xs shadow-md transition-all flex items-center gap-2 disabled:opacity-50"
                             >
-                              <ShieldAlert className="w-4 h-4" />
+                              <ShieldAlert className="w-4 h-4 text-black" />
                               <span>Report As Stolen</span>
                             </button>
-                            <span className="text-xs font-mono text-emerald-400">
+                            <span className="text-xs font-mono text-neutral-400">
                               ✓ Verified with VAHAN • Ready for fast-track recovery
                             </span>
                           </>
@@ -646,12 +655,12 @@ function CitizenDashboard({ initialTab = 'list' }) {
                           <>
                             <button
                               disabled
-                              className="px-6 py-2.5 rounded-full bg-slate-900 text-slate-500 border border-slate-800 font-bold uppercase tracking-wider text-xs cursor-not-allowed flex items-center gap-2"
+                              className="px-6 py-2.5 rounded-full bg-neutral-900 text-neutral-600 border border-neutral-800 font-bold uppercase tracking-wider text-xs cursor-not-allowed flex items-center gap-2"
                             >
                               <Lock className="w-4 h-4" />
                               <span>Report As Stolen</span>
                             </button>
-                            <span className="text-xs font-mono text-amber-400">
+                            <span className="text-xs font-mono text-neutral-500">
                               🔒 Stolen alert reporting unlocks upon police verification
                             </span>
                           </>
