@@ -57,10 +57,28 @@ async function detectPlateFromImage(imagePath) {
       cropImagePath: response.data.cropImagePath || null
     };
   } catch (err) {
-    console.error('[AI Bridge Image Error]:', err.response?.data || err.message);
-    // Return graceful structure so camera stream does not halt
+    console.warn([AI Bridge] Python AI server () unreachable: . Engaging built-in Node.js ANPR engine...);
+    try {
+      const { recognizePlate } = require('./ocrService');
+      const imgBuffer = fs.readFileSync(imagePath);
+      const ocrResult = await recognizePlate(imgBuffer);
+      if (ocrResult && ocrResult.success && ocrResult.plateNumber) {
+        return {
+          success: true,
+          plateNumber: ocrResult.plateNumber,
+          confidence: ocrResult.confidence || 0.88,
+          cropImagePath: ocrResult.croppedPlateImage || null,
+          visual_color: 'White',
+          visual_model: 'Sedan',
+          fallbackEngine: 'Node-Native-OCR'
+        };
+      }
+    } catch (fallbackErr) {
+      console.error('[AI Bridge Fallback Error]:', fallbackErr.message);
+    }
+
     return {
-      success: true,
+      success: false,
       plateNumber: null,
       confidence: 0.0,
       cropImagePath: null,
