@@ -107,10 +107,22 @@ function Login({ onAuthSuccess }) {
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
+      const responseBody = await response.text();
+      let data = null;
+      try {
+        data = responseBody ? JSON.parse(responseBody) : null;
+      } catch {
+        // A proxy or unavailable backend can return an empty or non-JSON response.
+      }
 
       if (!response.ok || !data.success) {
-        throw new Error(data.message || data.error || 'Authentication failed');
+        throw new Error(
+          data?.message ||
+            data?.error ||
+            (response.ok
+              ? 'Authentication service returned an invalid response.'
+              : `Authentication service returned HTTP ${response.status}. Ensure the backend is running.`)
+        );
       }
 
       if (data.token) {

@@ -20,9 +20,14 @@ function PoliceCameraConsole() {
   // Critical Alert Banner state
   const [criticalHit, setCriticalHit] = useState(null); // { plateNumber, alertDetails, timestamp }
 
-  // Live Detection Feed
+// Live Detection Feed
   const [feedSightings, setFeedSightings] = useState([]);
   const [feedLoading, setFeedLoading] = useState(true);
+  const [selectedSightings, setSelectedSightings] = useState(new Set());
+  const [deletingId, setDeletingId] = useState(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isClearingAll, setIsClearingAll] = useState(false);
+  const [deleteFeedback, setDeleteFeedback] = useState(null);
 
   // Video Upload state
   const [videoFile, setVideoFile] = useState(null);
@@ -115,6 +120,122 @@ function PoliceCameraConsole() {
     } finally {
       setFeedLoading(false);
     }
+  };
+
+// Feedback toast helper
+  const showFeedback = (text, type = 'success') => {
+    setDeleteFeedback({ text, type });
+    setTimeout(() => {
+      setDeleteFeedback((curr) => (curr?.text === text ? null : curr));
+    }, 4000);
+  };
+
+  // Delete a single detection entry
+  const handleDeleteSingle = async (sightingId, plateNumber) => {
+    if (!sightingId) return;
+    setDeletingId(sightingId);
+    try {
+      const res = await fetch(`/api/sightings/${sightingId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedSightings((prev) => prev.filter((item) => item._id !== sightingId));
+        setSelectedSightings((prev) => {
+          const next = new Set(prev);
+          next.delete(sightingId);
+          return next;
+        });
+        showFeedback(`Detection entry for ${plateNumber || 'vehicle'} deleted`, 'success');
+      } else {
+        showFeedback(data.message || 'Failed to delete sighting', 'error');
+      }
+    } catch (err) {
+      showFeedback('Network error while deleting entry', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Bulk delete selected detection entries
+  const handleBulkDelete = async () => {
+    if (selectedSightings.size === 0) return;
+    if (!window.confirm(`Delete ${selectedSightings.size} selected detection record(s)?`)) {
+      return;
+    }
+    setIsBulkDeleting(true);
+    const idsToDelete = Array.from(selectedSightings);
+    try {
+      const res = await fetch('/api/sightings/bulk-delete', {
+        method: 'POST',
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ ids: idsToDelete })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedSightings((prev) => prev.filter((item) => !selectedSightings.has(item._id)));
+        setSelectedSightings(new Set());
+        showFeedback(`Deleted ${idsToDelete.length} detection record(s) successfully`, 'success');
+      } else {
+        showFeedback(data.message || 'Failed to delete selected records', 'error');
+      }
+    } catch (err) {
+      showFeedback('Network error while deleting records', 'error');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // Clear all checkpoint sightings
+  const handleClearAllSightings = async () => {
+    if (!window.confirm('Are you sure you want to clear all checkpoint detection records? This cannot be undone.')) {
+      return;
+    }
+    setIsClearingAll(true);
+    try {
+      const res = await fetch('/api/sightings/clear-feed', {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedSightings([]);
+        setSelectedSightings(new Set());
+        showFeedback('All checkpoint detection records cleared successfully', 'success');
+      } else {
+        showFeedback(data.message || 'Failed to clear sightings', 'error');
+      }
+    } catch (err) {
+      showFeedback('Network error while clearing detections', 'error');
+    } finally {
+      setIsClearingAll(false);
+    }
+  };
+
+  // Toggle select all checkboxes
+  const handleToggleSelectAll = () => {
+    if (selectedSightings.size === feedSightings.length && feedSightings.length > 0) {
+      setSelectedSightings(new Set());
+    } else {
+      setSelectedSightings(new Set(feedSightings.map((s) => s._id).filter(Boolean)));
+    }
+  };
+
+  // Toggle select single row checkbox
+  const handleToggleSelectRow = (id) => {
+    setSelectedSightings((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -756,28 +877,107 @@ function PoliceCameraConsole() {
       {/* LIVE DETECTION FEED TABLE */}
       <section className="card" style={{ padding: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <span style={{ fontSize: '1.25rem' }}>⚡</span>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-              Live Checkpoint Detection Feed ({feedSightings.length})
-            </h3>
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>
+                Live Checkpoint Detection Feed ({feedSightings.length})
+              </h3>
+              {selectedSightings.size > 0 && (
+                <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: '600' }}>
+                  {selectedSightings.size} of {feedSightings.length} selected
+                </span>
+              )}
+            </div>
           </div>
 
-          <button
-            onClick={fetchRecentSightings}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {selectedSightings.size > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: '0.35rem 0.75rem',
+                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                  color: '#f87171',
+                  border: '1px solid #ef4444',
+                  borderRadius: '6px',
+                  fontSize: '0.8rem',
+                  fontWeight: '700',
+                  cursor: isBulkDeleting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isBulkDeleting ? 'Deleting...' : `🗑️ Delete Selected (${selectedSightings.size})`}
+              </button>
+            )}
+
+            {feedSightings.length > 0 && (
+              <button
+                onClick={handleClearAllSightings}
+                disabled={isClearingAll}
+                title="Delete all entries in the checkpoint feed"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: '0.35rem 0.75rem',
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  color: '#fca5a5',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '6px',
+                  fontSize: '0.8rem',
+                  fontWeight: '600',
+                  cursor: isClearingAll ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isClearingAll ? 'Clearing...' : '🗑️ Clear Feed'}
+              </button>
+            )}
+
+            <button
+              onClick={fetchRecentSightings}
+              style={{
+                padding: '0.35rem 0.75rem',
+                backgroundColor: 'var(--bg-secondary)',
+                color: 'var(--text-secondary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              🔄 Refresh Sightings
+            </button>
+          </div>
+        </div>
+
+        {deleteFeedback && (
+          <div
             style={{
-              padding: '0.35rem 0.75rem',
-              backgroundColor: 'var(--bg-secondary)',
-              color: 'var(--text-secondary)',
-              border: '1px solid var(--border-color)',
+              padding: '0.6rem 1rem',
+              marginBottom: '1rem',
               borderRadius: '6px',
-              fontSize: '0.8rem',
-              cursor: 'pointer'
+              backgroundColor: deleteFeedback.type === 'error' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+              border: `1px solid ${deleteFeedback.type === 'error' ? '#ef4444' : '#10b981'}`,
+              color: deleteFeedback.type === 'error' ? '#fca5a5' : '#6ee7b7',
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
             }}
           >
-            🔄 Refresh Sightings
-          </button>
-        </div>
+            <span>{deleteFeedback.text}</span>
+            <button
+              onClick={() => setDeleteFeedback(null)}
+              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {feedLoading ? (
           <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
@@ -792,11 +992,21 @@ function PoliceCameraConsole() {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                  <th style={{ width: '38px', padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={feedSightings.length > 0 && selectedSightings.size === feedSightings.length}
+                      onChange={handleToggleSelectAll}
+                      style={{ cursor: 'pointer', accentColor: 'var(--accent-blue, #3b82f6)' }}
+                      title="Select all"
+                    />
+                  </th>
                   <th style={{ padding: '0.75rem 1rem' }}>Timestamp</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Plate Number</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Camera Checkpoint</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Confidence</th>
                   <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Status Badge</th>
+                  <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -805,9 +1015,21 @@ function PoliceCameraConsole() {
                     key={s._id || index}
                     style={{
                       borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                      backgroundColor: s.hotlistHit ? 'rgba(239, 68, 68, 0.12)' : 'transparent'
+                      backgroundColor: selectedSightings.has(s._id)
+                        ? 'rgba(56, 189, 248, 0.08)'
+                        : s.hotlistHit
+                        ? 'rgba(239, 68, 68, 0.12)'
+                        : 'transparent'
                     }}
                   >
+                    <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedSightings.has(s._id)}
+                        onChange={() => handleToggleSelectRow(s._id)}
+                        style={{ cursor: 'pointer', accentColor: 'var(--accent-blue, #3b82f6)' }}
+                      />
+                    </td>
                     <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
                       {formatTimestamp(s.timestamp)}
                     </td>
@@ -863,6 +1085,38 @@ function PoliceCameraConsole() {
                           ✓ Normal Pass
                         </span>
                       )}
+                    </td>
+                    <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                      <button
+                        onClick={() => handleDeleteSingle(s._id, s.plateNumber)}
+                        disabled={deletingId === s._id}
+                        title={`Delete detection entry for ${s.plateNumber}`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          padding: '0.25rem 0.5rem',
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          borderRadius: '5px',
+                          color: '#f87171',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          cursor: deletingId === s._id ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.15s ease',
+                          opacity: deletingId === s._id ? 0.5 : 1
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.25)';
+                          e.currentTarget.style.borderColor = '#ef4444';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                          e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                        }}
+                      >
+                        {deletingId === s._id ? '...' : '🗑️ Delete'}
+                      </button>
                     </td>
                   </tr>
                 ))}
