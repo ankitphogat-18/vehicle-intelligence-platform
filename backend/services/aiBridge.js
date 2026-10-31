@@ -57,7 +57,7 @@ async function detectPlateFromImage(imagePath) {
       cropImagePath: response.data.cropImagePath || null
     };
   } catch (err) {
-    console.warn([AI Bridge] Python AI server () unreachable: . Engaging built-in Node.js ANPR engine...);
+    console.warn(`[AI Bridge] Python AI server (${AI_SERVICE_URL}) unreachable: ${err.message}. Engaging built-in Node.js ANPR engine...`);
     try {
       const { recognizePlate } = require('./ocrService');
       const imgBuffer = fs.readFileSync(imagePath);
